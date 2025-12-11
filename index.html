@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadowverse WB エクスチェンジチケット確率計算機</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent-color: #58a6ff;
+            --border-color: #30363d;
+            --success-color: #238636;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #ffffff;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 1rem;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-hint {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: right;
+            margin-top: 4px;
+        }
+
+        .hint-primary {
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        label {
+            font-weight: 600;
+        }
+
+        input[type="number"] {
+            background-color: #0d1117;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            width: 100px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background-color: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Highlight specific probabilities */
+        .high-prob {
+            color: #7ee787;
+        }
+
+        .toggle-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        select {
+            background-color: #0d1117;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>エクスチェンジチケット確率計算機</h1>
+            <p class="subtitle">Shadowverse WB - 1種類あたり 0.015% / 1パック8枚</p>
+        </header>
+
+        <div class="card">
+            <div class="input-group">
+                <div class="input-row">
+                    <label for="ticketTypes">このパックのチケット種類数</label>
+                    <input type="number" id="ticketTypes" value="8" min="1" max="100" step="1">
+                </div>
+                <div class="input-hint hint-primary" id="anyProbDisplay">いずれかのチケットが出る確率: 0.120% /枚</div>
+                <div class="input-hint" id="specificProbDisplay">特定のチケット(1点狙い)の確率: 0.015% /枚</div>
+            </div>
+            <div class="input-group">
+                <div class="input-row">
+                    <label for="maxPacks">シミュレーションするパック数</label>
+                    <input type="number" id="maxPacks" value="300" min="10" max="2000" step="10">
+                </div>
+            </div>
+
+            <div style="margin-bottom:10px; text-align:right;">
+                <label for="modeSelect" style="font-size:0.9rem; margin-right:5px;">表示モード:</label>
+                <select id="modeSelect">
+                    <option value="any">いずれかのチケット (種類数に応じて上昇)</option>
+                    <option value="specific">特定のチケット (0.015%固定)</option>
+                </select>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-value" id="p50">--</span>
+                    <span class="stat-label">50% 到達パック数</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-value" id="p90">--</span>
+                    <span class="stat-label">90% 到達パック数</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-value" id="p99">--</span>
+                    <span class="stat-label">99% 到達パック数</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="chart-container">
+                <canvas id="probChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>詳細データ</h3>
+            <div style="overflow-x: auto;">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>パック数</th>
+                            <th>カード数</th>
+                            <th>獲得確率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JS fills this -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const CARDS_PER_PACK = 8;
+        const PROB_PER_TYPE = 0.00015; // 0.015% per type
+
+        // DOM Elements
+        const maxPacksInput = document.getElementById('maxPacks');
+        const ticketTypesInput = document.getElementById('ticketTypes');
+        const anyProbDisplay = document.getElementById('anyProbDisplay');
+        const specificProbDisplay = document.getElementById('specificProbDisplay');
+        const modeSelect = document.getElementById('modeSelect');
+        const tableBody = document.querySelector('#dataTable tbody');
+        const p50El = document.getElementById('p50');
+        const p90El = document.getElementById('p90');
+        const p99El = document.getElementById('p99');
+
+        let chartInstance = null;
+
+        // Calculation Function
+        function calculateProbability(packs, types, mode) {
+            const cards = packs * CARDS_PER_PACK;
+            let perCardProb;
+
+            if (mode === 'any') {
+                // P(Any) = 1 - (1 - p_type)^types
+                // Accurate: 1 - (1 - PROB_PER_TYPE)^types
+                perCardProb = 1 - Math.pow(1 - PROB_PER_TYPE, types);
+            } else {
+                // Specific
+                perCardProb = PROB_PER_TYPE;
+            }
+
+            // Cap at 1
+            if (perCardProb > 1) perCardProb = 1;
+
+            const failProb = Math.pow(1 - perCardProb, cards);
+            return 1 - failProb;
+        }
+
+        // Find pack count for target probability
+        function findPackCountForProb(targetProb, types, mode) {
+            let packs = 0;
+            while (true) {
+                packs++;
+                if (calculateProbability(packs, types, mode) >= targetProb) {
+                    return packs;
+                }
+                if (packs > 50000) return "> 50000";
+            }
+        }
+
+        function update() {
+            const maxPacks = parseInt(maxPacksInput.value) || 300;
+            const types = parseInt(ticketTypesInput.value) || 8;
+            const mode = modeSelect.value; // 'any' or 'specific'
+
+            // Update Hints
+            const anyCardProb = (1 - Math.pow(1 - PROB_PER_TYPE, types));
+            const anyProbPercent = (anyCardProb * 100).toFixed(4);
+            const specificProbPercent = (PROB_PER_TYPE * 100).toFixed(3);
+
+            anyProbDisplay.textContent = `いずれかのチケットが出る確率: 約${anyProbPercent}% /枚 (合計)`;
+            specificProbDisplay.textContent = `特定のチケット(1点狙い)の確率: ${specificProbPercent}% /枚 (固定)`;
+
+            // Update Stats
+            p50El.textContent = findPackCountForProb(0.5, types, mode) + " パック";
+            p90El.textContent = findPackCountForProb(0.9, types, mode) + " パック";
+            p99El.textContent = findPackCountForProb(0.99, types, mode) + " パック";
+
+            // Generate Data
+            const labels = [];
+            const dataPoints = [];
+
+            // Clear Table
+            tableBody.innerHTML = '';
+
+            // Determine step size
+            let tableStep = 10;
+            if (maxPacks <= 50) tableStep = 1;
+            else if (maxPacks > 500) tableStep = 50;
+
+            for (let i = 0; i <= maxPacks; i++) {
+                let chartStep = Math.max(1, Math.floor(maxPacks / 100));
+                if (i % chartStep === 0 || i === maxPacks) {
+                    const prob = calculateProbability(i, types, mode);
+                    labels.push(i);
+                    dataPoints.push(prob * 100);
+                }
+            }
+
+            const specificCheckpoints = [1, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+            let tableRows = new Set([...specificCheckpoints.filter(p => p <= maxPacks)]);
+            for (let j = tableStep; j <= maxPacks; j += tableStep) tableRows.add(j);
+            tableRows.add(maxPacks);
+
+            const sortedRows = Array.from(tableRows).sort((a, b) => a - b);
+
+            sortedRows.forEach(packs => {
+                const prob = calculateProbability(packs, types, mode);
+                const percentage = (prob * 100).toFixed(3) + "%";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td>${packs}</td>
+                <td>${packs * CARDS_PER_PACK}</td>
+                <td class="${prob > 0.5 ? 'high-prob' : ''}">${percentage}</td>
+            `;
+                tableBody.appendChild(tr);
+            });
+
+            // Update Chart
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('probChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: mode === 'any' ? 'いずれかのチケット獲得確率' : '特定のチケット獲得確率',
+                        data: dataPoints,
+                        borderColor: '#58a6ff',
+                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'パック数', color: '#8b949e' },
+                            grid: { color: '#30363d' },
+                            ticks: { color: '#8b949e' }
+                        },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: '確率 (%)', color: '#8b949e' },
+                            grid: { color: '#30363d' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#c9d1d9' } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function (context) {
+                                    return `確率: ${context.parsed.y.toFixed(3)}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        maxPacksInput.addEventListener('input', update);
+        ticketTypesInput.addEventListener('input', update);
+        modeSelect.addEventListener('change', update);
+        update();
+
+    </script>
+
+</body>
+
+</html>
