@@ -107,6 +107,8 @@
             barRatio: 70,      // カテゴリ幅に対する棒グループの幅(%)
             barGap: 2,         // 同一カテゴリ内の棒同士の間隔(pt)
             plotBg: "none",
+            plotFrame: { show: false, color: "#333333", width: 0.75, dash: "" },
+            outerFrame: { show: false, color: "#333333", width: 0.75, dash: "", fill: "none", padding: 10, radius: 0 },
             series: [],
             valueLabels: { show: false, decimals: 0, style: textStyle(7) },
             axis: {
@@ -461,6 +463,14 @@
             if (s.type !== "area") sg.opacity = st.opacity;
         }
 
+        // プロット枠
+        if (s.plotFrame.show) {
+            var pf = g.pathItems.rectangle(oy, ox, W, H);
+            pf.name = "plot-frame";
+            pf.filled = false;
+            setStroke(pf, s.plotFrame.color, s.plotFrame.width, s.plotFrame.dash);
+        }
+
         // 軸線
         var ag = g.groupItems.add(); ag.name = "axes";
         if (ax.xAxisLine) line(ag, ox, oy - H, ox + W, oy - H, ax.color, ax.width, "");
@@ -539,6 +549,18 @@
         if (trim(s.title.text) !== "") {
             var gb = g.visibleBounds;
             text(g, s.title.text, ox + W / 2, gb[1] + 8, s.title.style, "center", "bottom", 0).name = "title";
+        }
+
+        // グラフ全体の枠（最背面）
+        if (s.outerFrame.show) {
+            var ob = g.visibleBounds, pd = s.outerFrame.padding, rr = Math.max(0, s.outerFrame.radius);
+            var fw = ob[2] - ob[0] + pd * 2, fh = ob[1] - ob[3] + pd * 2;
+            var of = rr > 0 ? g.pathItems.roundedRectangle(ob[1] + pd, ob[0] - pd, fw, fh, rr, rr)
+                            : g.pathItems.rectangle(ob[1] + pd, ob[0] - pd, fw, fh);
+            of.name = "outer-frame";
+            setFill(of, s.outerFrame.fill);
+            setStroke(of, s.outerFrame.color, s.outerFrame.width, s.outerFrame.dash);
+            of.zOrder(ZOrderMethod.SENDTOBACK);
         }
 
         g.note = TAG + serialize(s);
@@ -912,6 +934,25 @@
         checkField(lp, "凡例を表示", "legend.show");
         listField(lp, "位置", "legend.position", ["右", "上", "下"], ["right", "top", "bottom"]);
         styleField(lp, "凡例の文字", "legend.style");
+
+        // --- タブ5: 枠 ---
+        var t5 = tabs.add("tab", undefined, "枠");
+        t5.alignChildren = "left";
+        var fp1 = t5.add("panel", undefined, "プロット領域の枠");
+        fp1.alignChildren = "left";
+        checkField(fp1, "枠を表示", "plotFrame.show");
+        colorField(fp1, "線の色", "plotFrame.color");
+        numField(fp1, "線の幅", "plotFrame.width", 5, "pt");
+        textField(fp1, "破線", "plotFrame.dash", 8).helpTip = "例: 4,2（空欄で実線）";
+        var fp2 = t5.add("panel", undefined, "グラフ全体の枠");
+        fp2.alignChildren = "left";
+        checkField(fp2, "枠を表示", "outerFrame.show");
+        colorField(fp2, "線の色", "outerFrame.color");
+        numField(fp2, "線の幅", "outerFrame.width", 5, "pt");
+        textField(fp2, "破線", "outerFrame.dash", 8).helpTip = "例: 4,2（空欄で実線）";
+        colorField(fp2, "塗り", "outerFrame.fill");
+        numField(fp2, "余白", "outerFrame.padding", 5, "pt");
+        numField(fp2, "角丸の半径", "outerFrame.radius", 5, "pt（0 で角丸なし）");
 
         // --- ボタン ---
         var btns = dlg.add("group");
