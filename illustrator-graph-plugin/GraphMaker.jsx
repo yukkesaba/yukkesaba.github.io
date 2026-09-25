@@ -355,7 +355,7 @@
             valGrid.push(vp(tv));
         }
         for (var i = 0; i < n; i++) catTicks.push({ pos: cp(i), label: d.labels[i] });
-        for (i = 0; i <= n; i++) catGrid.push(horiz ? oy - band * i : ox + band * i);
+        for (i = 0; i < n; i++) catGrid.push(cp(i)); // 項目の位置（目盛りと同じ）
         var xTickList = horiz ? valTicks : catTicks, yTickList = horiz ? catTicks : valTicks;
         var xGridList = horiz ? valGrid : catGrid, yGridList = horiz ? catGrid : valGrid;
 
