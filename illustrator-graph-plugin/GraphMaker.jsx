@@ -485,6 +485,18 @@
             if (ax.yTicks && tl > 0) line(ag, ox - tl, yp, ox, yp, ax.color, ax.width, "");
             text(yl, yTickList[i].label, ox - (ax.yTicks ? tl : 0) - 3, yp, ax.yStyle, "right", "middle", 0);
         }
+        // 横棒の項目ラベルは、ラベル列の中で中央揃え
+        if (horiz && yl.textFrames.length) {
+            var colW = 0, tfs = yl.textFrames, rightX = ox - (ax.yTicks ? tl : 0) - 3;
+            for (i = 0; i < tfs.length; i++) {
+                var vb = tfs[i].visibleBounds;
+                if (vb[2] - vb[0] > colW) colW = vb[2] - vb[0];
+            }
+            for (i = 0; i < tfs.length; i++) {
+                var cb = tfs[i].visibleBounds;
+                tfs[i].translate(rightX - colW / 2 - (cb[0] + cb[2]) / 2, 0);
+            }
+        }
 
         // 値ラベル
         if (s.valueLabels.show) {
