@@ -115,6 +115,7 @@
                 yMin: "", yMax: "", yStep: "",
                 decimals: 0, thousands: true, prefix: "", suffix: "",
                 xRotate: 0,
+                catAlign: "center",  // 横棒の項目ラベルの揃え left / center / right
                 xStyle: textStyle(8), yStyle: textStyle(8),
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
             },
@@ -485,16 +486,22 @@
             if (ax.yTicks && tl > 0) line(ag, ox - tl, yp, ox, yp, ax.color, ax.width, "");
             text(yl, yTickList[i].label, ox - (ax.yTicks ? tl : 0) - 3, yp, ax.yStyle, "right", "middle", 0);
         }
-        // 横棒の項目ラベルは、ラベル列の中で中央揃え
+        // 横棒の項目ラベルは、ラベル列の中で 左 / 中央 / 右 揃え
         if (horiz && yl.textFrames.length) {
             var colW = 0, tfs = yl.textFrames, rightX = ox - (ax.yTicks ? tl : 0) - 3;
+            var al = ax.catAlign || "center";
+            var just = al === "left" ? Justification.LEFT : (al === "right" ? Justification.RIGHT : Justification.CENTER);
             for (i = 0; i < tfs.length; i++) {
+                try { tfs[i].textRange.paragraphAttributes.justification = just; } catch (e) { }
                 var vb = tfs[i].visibleBounds;
                 if (vb[2] - vb[0] > colW) colW = vb[2] - vb[0];
             }
             for (i = 0; i < tfs.length; i++) {
                 var cb = tfs[i].visibleBounds;
-                tfs[i].translate(rightX - colW / 2 - (cb[0] + cb[2]) / 2, 0);
+                var dx = al === "left" ? (rightX - colW) - cb[0]
+                       : al === "right" ? rightX - cb[2]
+                       : rightX - colW / 2 - (cb[0] + cb[2]) / 2;
+                tfs[i].translate(dx, 0);
             }
         }
 
@@ -870,6 +877,7 @@
         var sufE = a5.add("edittext", undefined, ""); sufE.characters = 5; reg.push({ path: "axis.suffix", ctrl: sufE, kind: "text" });
         a5.add("statictext", undefined, "例: ¥ / %");
         numField(t3, "X ラベル回転", "axis.xRotate", 4, "°（例: 45）");
+        listField(t3, "項目ラベルの揃え", "axis.catAlign", ["左揃え", "中央揃え", "右揃え"], ["left", "center", "right"]).helpTip = "横棒グラフの左側に並ぶ項目名の揃え方";
         var gp = t3.add("panel", undefined, "グリッド線");
         gp.alignChildren = "left";
         function gridRow(label, key) {
