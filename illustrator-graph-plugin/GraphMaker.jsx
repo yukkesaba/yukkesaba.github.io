@@ -23,7 +23,35 @@
     // ------------------------------------------------------------------
     function trim(s) { return String(s).replace(/^\s+|\s+$/g, ""); }
 
-    function clone(o) { return eval(o.toSource()); }
+    // toSource() は改行(\r)をエスケープしないことがあり eval で
+    // 「ストリング定数が終了していません」になるため、自前で直列化する
+    function serialize(o) {
+        if (o === null || o === undefined) return "null";
+        if (typeof o === "number" || typeof o === "boolean") return String(o);
+        if (typeof o === "string") {
+            var out = "\"";
+            for (var i = 0; i < o.length; i++) {
+                var c = o.charCodeAt(i);
+                if (c < 32 || c > 126 || c === 34 || c === 92) {
+                    var h = c.toString(16);
+                    while (h.length < 4) h = "0" + h;
+                    out += "\\u" + h;
+                } else out += o.charAt(i);
+            }
+            return out + "\"";
+        }
+        var parts = [];
+        if (o instanceof Array) {
+            for (var j = 0; j < o.length; j++) parts.push(serialize(o[j]));
+            return "[" + parts.join(",") + "]";
+        }
+        for (var k in o) if (o.hasOwnProperty(k)) parts.push(serialize(k) + ":" + serialize(o[k]));
+        return "{" + parts.join(",") + "}";
+    }
+
+    function deserialize(str) { return eval("(" + str + ")"); }
+
+    function clone(o) { return deserialize(serialize(o)); }
 
     function merge(def, src) {
         // def をベースに src の値で上書き（src に無いキーは def の値を残す）
@@ -459,7 +487,7 @@
             text(g, s.title.text, ox + W / 2, gb[1] + 8, s.title.style, "center", "bottom", 0).name = "title";
         }
 
-        g.note = TAG + s.toSource();
+        g.note = TAG + serialize(s);
         return g;
     }
 
@@ -506,7 +534,7 @@
     }
 
     function loadSettingsFrom(g) {
-        return merge(defaults(), eval(String(g.note).substr(TAG.length)));
+        return merge(defaults(), deserialize(String(g.note).substr(TAG.length)));
     }
 
     function loadPrefs() {
@@ -517,7 +545,7 @@
                 PREFS_FILE.open("r");
                 var src = PREFS_FILE.read();
                 PREFS_FILE.close();
-                s = merge(s, eval(src));
+                s = merge(s, deserialize(src));
             }
         } catch (e) { }
         return s;
@@ -527,7 +555,7 @@
         try {
             PREFS_FILE.encoding = "UTF-8";
             PREFS_FILE.open("w");
-            PREFS_FILE.write(s.toSource());
+            PREFS_FILE.write(serialize(s));
             PREFS_FILE.close();
         } catch (e) { }
     }
