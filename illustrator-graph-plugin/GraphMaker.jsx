@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GraphMaker.jsx  -  Illustrator 用 再編集可能グラフ作成スクリプト
  *
  * 使い方:
