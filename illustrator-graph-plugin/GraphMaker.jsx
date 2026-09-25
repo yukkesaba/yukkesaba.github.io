@@ -118,7 +118,10 @@
                 xStyle: textStyle(8), yStyle: textStyle(8),
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
             },
-            grid: { xShow: false, yShow: true, color: "#CCCCCC", width: 0.5, dash: "2,2" },
+            grid: {
+                xShow: false, xColor: "#CCCCCC", xWidth: 0.5, xDash: "2,2",
+                yShow: true, yColor: "#CCCCCC", yWidth: 0.5, yDash: "2,2"
+            },
             title: { text: "", style: { font: "", size: 14, color: "#000000" } },
             legend: { show: true, position: "right", style: textStyle(8) }
         };
@@ -369,9 +372,9 @@
         if (s.grid.xShow || s.grid.yShow) {
             var gg = g.groupItems.add(); gg.name = "grid";
             if (s.grid.xShow) for (t = 0; t < xGridList.length; t++)
-                line(gg, xGridList[t], oy, xGridList[t], oy - H, s.grid.color, s.grid.width, s.grid.dash);
+                line(gg, xGridList[t], oy, xGridList[t], oy - H, s.grid.xColor, s.grid.xWidth, s.grid.xDash);
             if (s.grid.yShow) for (t = 0; t < yGridList.length; t++)
-                line(gg, ox, yGridList[t], ox + W, yGridList[t], s.grid.color, s.grid.width, s.grid.dash);
+                line(gg, ox, yGridList[t], ox + W, yGridList[t], s.grid.yColor, s.grid.yWidth, s.grid.yDash);
         }
 
         // 系列
@@ -856,15 +859,20 @@
         a5.add("statictext", undefined, "例: ¥ / %");
         numField(t3, "X ラベル回転", "axis.xRotate", 4, "°（例: 45）");
         var gp = t3.add("panel", undefined, "グリッド線");
-        gp.orientation = "row";
-        checkField(gp, "縦線(X)", "grid.xShow");
-        checkField(gp, "横線(Y)", "grid.yShow");
-        var gc = gp.add("edittext", undefined, ""); gc.characters = 9; reg.push({ path: "grid.color", ctrl: gc, kind: "text" });
-        gp.add("button", undefined, "色…").onClick = function () { pickInto(gc); };
-        gp.add("statictext", undefined, "幅");
-        var gw = gp.add("edittext", undefined, ""); gw.characters = 4; reg.push({ path: "grid.width", ctrl: gw, kind: "num" });
-        gp.add("statictext", undefined, "破線");
-        var gd = gp.add("edittext", undefined, ""); gd.characters = 6; reg.push({ path: "grid.dash", ctrl: gd, kind: "text" });
+        gp.alignChildren = "left";
+        function gridRow(label, key) {
+            var r = gp.add("group");
+            checkField(r, label, "grid." + key + "Show").preferredSize.width = 80;
+            r.add("statictext", undefined, "色");
+            var c = r.add("edittext", undefined, ""); c.characters = 9; reg.push({ path: "grid." + key + "Color", ctrl: c, kind: "text" });
+            r.add("button", undefined, "選択…").onClick = function () { pickInto(c); };
+            r.add("statictext", undefined, "幅");
+            var w = r.add("edittext", undefined, ""); w.characters = 4; reg.push({ path: "grid." + key + "Width", ctrl: w, kind: "num" });
+            r.add("statictext", undefined, "pt  破線");
+            var dd = r.add("edittext", undefined, ""); dd.characters = 6; reg.push({ path: "grid." + key + "Dash", ctrl: dd, kind: "text" });
+        }
+        gridRow("縦線(X)", "x");
+        gridRow("横線(Y)", "y");
         var stRow = t3.add("group");
         stRow.alignChildren = "top";
         styleField(stRow, "X 目盛りの文字", "axis.xStyle");
