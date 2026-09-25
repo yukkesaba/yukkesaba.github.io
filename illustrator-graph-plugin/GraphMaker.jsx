@@ -100,7 +100,7 @@
 
     function defaults() {
         return {
-            type: "bar", // bar / stacked / line / area
+            type: "bar", // bar / stacked / hbar / hstacked / line / area
             data: "項目,2023年,2024年\nA,120,150\nB,80,95\nC,140,130\nD,60,110",
             width: 300,
             height: 200,
@@ -110,15 +110,15 @@
             series: [],
             valueLabels: { show: false, decimals: 0, style: textStyle(7) },
             axis: {
-                color: "#333333", width: 0.75, tickLen: 4, xTicks: true,
+                color: "#333333", width: 0.75, tickLen: 4,
+                xAxisLine: true, yAxisLine: true, xTicks: true, yTicks: true,
                 yMin: "", yMax: "", yStep: "",
                 decimals: 0, thousands: true, prefix: "", suffix: "",
-                showYAxisLine: true,
                 xRotate: 0,
                 xStyle: textStyle(8), yStyle: textStyle(8),
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
             },
-            grid: { show: true, color: "#CCCCCC", width: 0.5, dash: "2,2" },
+            grid: { xShow: false, yShow: true, color: "#CCCCCC", width: 0.5, dash: "2,2" },
             title: { text: "", style: { font: "", size: 14, color: "#000000" } },
             legend: { show: true, position: "right", style: textStyle(8) }
         };
@@ -280,7 +280,7 @@
 
     function computeScale(s, d) {
         var lo = Infinity, hi = -Infinity, i, j;
-        if (s.type === "stacked") {
+        if (s.type === "stacked" || s.type === "hstacked") {
             for (i = 0; i < d.labels.length; i++) {
                 var pos = 0, neg = 0;
                 for (j = 0; j < d.values.length; j++) {
@@ -328,17 +328,36 @@
         var n = d.labels.length, ns = d.names.length;
         var sc = computeScale(s, d);
         var ax = s.axis;
+        var horiz = (s.type === "hbar" || s.type === "hstacked");
+        var stacked = (s.type === "stacked" || s.type === "hstacked");
+        var isBar = horiz || s.type === "bar" || s.type === "stacked";
 
         var g = container.groupItems.add();
         g.name = "GraphMaker";
 
-        function py(v) {
+        // 値 → 座標（縦グラフは y、横棒は x）
+        function vp(v) {
             v = Math.max(sc.min, Math.min(sc.max, v));
-            return oy - H + (v - sc.min) / (sc.max - sc.min) * H;
+            var r = (v - sc.min) / (sc.max - sc.min);
+            return horiz ? ox + r * W : oy - H + r * H;
         }
-        var band = W / n;
-        function cx(i) { return ox + band * (i + 0.5); }
-        var baseY = py(Math.max(sc.min, Math.min(sc.max, 0)));
+        // カテゴリ i の中心座標（縦グラフは x（左→右）、横棒は y（上→下））
+        var band = (horiz ? H : W) / n;
+        function cp(i) { return horiz ? oy - band * (i + 0.5) : ox + band * (i + 0.5); }
+        var basePos = vp(Math.max(sc.min, Math.min(sc.max, 0)));
+
+        // 目盛りリスト（X=下辺, Y=左辺）
+        var steps = Math.round((sc.max - sc.min) / sc.step);
+        var valTicks = [], catTicks = [], valGrid = [], catGrid = [];
+        for (var t = 0; t <= steps; t++) {
+            var tv = sc.min + t * sc.step;
+            valTicks.push({ pos: vp(tv), label: formatNumber(tv, ax.decimals, ax.thousands, ax.prefix, ax.suffix) });
+            valGrid.push(vp(tv));
+        }
+        for (var i = 0; i < n; i++) catTicks.push({ pos: cp(i), label: d.labels[i] });
+        for (i = 0; i <= n; i++) catGrid.push(horiz ? oy - band * i : ox + band * i);
+        var xTickList = horiz ? valTicks : catTicks, yTickList = horiz ? catTicks : valTicks;
+        var xGridList = horiz ? valGrid : catGrid, yGridList = horiz ? catGrid : valGrid;
 
         // プロット領域（再編集時の位置の基準にもなる）
         var plot = g.pathItems.rectangle(oy, ox, W, H);
@@ -347,19 +366,18 @@
         plot.stroked = false;
 
         // グリッド
-        var steps = Math.round((sc.max - sc.min) / sc.step);
-        if (s.grid.show) {
+        if (s.grid.xShow || s.grid.yShow) {
             var gg = g.groupItems.add(); gg.name = "grid";
-            for (var t = 0; t <= steps; t++) {
-                var gy = py(sc.min + t * sc.step);
-                line(gg, ox, gy, ox + W, gy, s.grid.color, s.grid.width, s.grid.dash);
-            }
+            if (s.grid.xShow) for (t = 0; t < xGridList.length; t++)
+                line(gg, xGridList[t], oy, xGridList[t], oy - H, s.grid.color, s.grid.width, s.grid.dash);
+            if (s.grid.yShow) for (t = 0; t < yGridList.length; t++)
+                line(gg, ox, yGridList[t], ox + W, yGridList[t], s.grid.color, s.grid.width, s.grid.dash);
         }
 
         // 系列
         var vlabels = [];
         var stackPos = [], stackNeg = [];
-        for (var i = 0; i < n; i++) { stackPos.push(0); stackNeg.push(0); }
+        for (i = 0; i < n; i++) { stackPos.push(0); stackNeg.push(0); }
         var groupW = band * s.barRatio / 100;
         var barW = (groupW - s.barGap * (ns - 1)) / ns;
         if (barW < 0.1) barW = 0.1;
@@ -370,25 +388,35 @@
             sg.name = d.names[k];
             var vals = d.values[k];
 
-            if (s.type === "bar" || s.type === "stacked") {
+            if (isBar) {
                 for (i = 0; i < n; i++) {
                     var v = vals[i];
                     if (v === null) continue;
-                    var x0, w, yTop, yBot;
-                    if (s.type === "bar") {
-                        x0 = cx(i) - groupW / 2 + k * (barW + s.barGap);
-                        w = barW;
-                        yTop = Math.max(py(v), baseY); yBot = Math.min(py(v), baseY);
-                        vlabels.push({ v: v, x: x0 + w / 2, y: v >= 0 ? yTop : yBot, below: v < 0 });
+                    var c0, cw, p1, p2; // c0: カテゴリ方向の開始位置, p1/p2: 値方向の両端
+                    if (!stacked) {
+                        cw = barW;
+                        c0 = horiz ? cp(i) + groupW / 2 - k * (barW + s.barGap)   // 上から順に
+                                   : cp(i) - groupW / 2 + k * (barW + s.barGap);
+                        p1 = basePos; p2 = vp(v);
                     } else {
-                        x0 = cx(i) - groupW / 2; w = groupW;
+                        cw = groupW;
+                        c0 = horiz ? cp(i) + groupW / 2 : cp(i) - groupW / 2;
                         var from = v >= 0 ? stackPos[i] : stackNeg[i];
                         var to = from + v;
                         if (v >= 0) stackPos[i] = to; else stackNeg[i] = to;
-                        yTop = Math.max(py(from), py(to)); yBot = Math.min(py(from), py(to));
-                        vlabels.push({ v: v, x: x0 + w / 2, y: (yTop + yBot) / 2, mid: true });
+                        p1 = vp(from); p2 = vp(to);
                     }
-                    var r = sg.pathItems.rectangle(yTop, x0, w, Math.max(yTop - yBot, 0.01));
+                    var lo = Math.min(p1, p2), hi = Math.max(p1, p2), len = Math.max(hi - lo, 0.01);
+                    var r, lc = horiz ? c0 - cw / 2 : c0 + cw / 2; // 棒の中心（カテゴリ方向）
+                    if (horiz) {
+                        r = sg.pathItems.rectangle(c0, lo, len, cw);
+                        if (stacked) vlabels.push({ v: v, x: (lo + hi) / 2, y: lc, pos: "mid" });
+                        else vlabels.push({ v: v, x: v >= 0 ? hi : lo, y: lc, pos: v >= 0 ? "right" : "left" });
+                    } else {
+                        r = sg.pathItems.rectangle(hi, c0, cw, len);
+                        if (stacked) vlabels.push({ v: v, x: lc, y: (lo + hi) / 2, pos: "mid" });
+                        else vlabels.push({ v: v, x: lc, y: v >= 0 ? hi : lo, pos: v >= 0 ? "above" : "below" });
+                    }
                     setFill(r, st.color);
                     setStroke(r, st.borderColor, st.borderWidth, "");
                 }
@@ -397,8 +425,8 @@
                 var segs = [], cur = [];
                 for (i = 0; i < n; i++) {
                     if (vals[i] === null) { if (cur.length) segs.push(cur); cur = []; continue; }
-                    cur.push([cx(i), py(vals[i])]);
-                    vlabels.push({ v: vals[i], x: cx(i), y: py(vals[i]) + st.markerSize / 2 });
+                    cur.push([cp(i), vp(vals[i])]);
+                    vlabels.push({ v: vals[i], x: cp(i), y: vp(vals[i]) + st.markerSize / 2, pos: "above" });
                 }
                 if (cur.length) segs.push(cur);
                 for (var q = 0; q < segs.length; q++) {
@@ -406,8 +434,8 @@
                     if (s.type === "area" && pts.length > 1) {
                         var ap = sg.pathItems.add();
                         var poly = pts.slice(0);
-                        poly.push([pts[pts.length - 1][0], baseY]);
-                        poly.push([pts[0][0], baseY]);
+                        poly.push([pts[pts.length - 1][0], basePos]);
+                        poly.push([pts[0][0], basePos]);
                         ap.setEntirePath(poly);
                         ap.closed = true;
                         setFill(ap, st.color);
@@ -429,40 +457,44 @@
             if (s.type !== "area") sg.opacity = st.opacity;
         }
 
-        // 軸
+        // 軸線
         var ag = g.groupItems.add(); ag.name = "axes";
-        line(ag, ox, oy - H, ox + W, oy - H, ax.color, ax.width, "");
-        if (baseY > oy - H + 0.01) line(ag, ox, baseY, ox + W, baseY, ax.color, ax.width, "");
-        if (ax.showYAxisLine) line(ag, ox, oy, ox, oy - H, ax.color, ax.width, "");
+        if (ax.xAxisLine) line(ag, ox, oy - H, ox + W, oy - H, ax.color, ax.width, "");
+        if (ax.yAxisLine) line(ag, ox, oy, ox, oy - H, ax.color, ax.width, "");
+        // 値 0 の基準線（最小値が負のとき）
+        if (horiz && ax.yAxisLine && basePos > ox + 0.01) line(ag, basePos, oy, basePos, oy - H, ax.color, ax.width, "");
+        if (!horiz && ax.xAxisLine && basePos > oy - H + 0.01) line(ag, ox, basePos, ox + W, basePos, ax.color, ax.width, "");
 
-        // Y 目盛りとラベル
-        var yl = g.groupItems.add(); yl.name = "y-labels";
-        for (t = 0; t <= steps; t++) {
-            var val = sc.min + t * sc.step;
-            var ty = py(val);
-            if (ax.tickLen > 0) line(ag, ox - ax.tickLen, ty, ox, ty, ax.color, ax.width, "");
-            text(yl, formatNumber(val, ax.decimals, ax.thousands, ax.prefix, ax.suffix),
-                 ox - ax.tickLen - 3, ty, ax.yStyle, "right", "middle", 0);
-        }
-
-        // X 目盛りとラベル
+        var tl = Math.max(ax.tickLen, 0);
+        // X（下辺）目盛りとラベル
         var xl = g.groupItems.add(); xl.name = "x-labels";
-        for (i = 0; i < n; i++) {
-            if (ax.xTicks && ax.tickLen > 0) line(ag, cx(i), oy - H, cx(i), oy - H - ax.tickLen, ax.color, ax.width, "");
-            var ly = oy - H - Math.max(ax.tickLen, 0) - 3;
-            if (ax.xRotate) text(xl, d.labels[i], cx(i), ly, ax.xStyle, "right", "top", ax.xRotate);
-            else text(xl, d.labels[i], cx(i), ly, ax.xStyle, "center", "top", 0);
+        for (i = 0; i < xTickList.length; i++) {
+            var xp = xTickList[i].pos;
+            if (ax.xTicks && tl > 0) line(ag, xp, oy - H, xp, oy - H - tl, ax.color, ax.width, "");
+            var ly = oy - H - (ax.xTicks ? tl : 0) - 3;
+            if (ax.xRotate) text(xl, xTickList[i].label, xp, ly, ax.xStyle, "right", "top", ax.xRotate);
+            else text(xl, xTickList[i].label, xp, ly, ax.xStyle, "center", "top", 0);
+        }
+        // Y（左辺）目盛りとラベル
+        var yl = g.groupItems.add(); yl.name = "y-labels";
+        for (i = 0; i < yTickList.length; i++) {
+            var yp = yTickList[i].pos;
+            if (ax.yTicks && tl > 0) line(ag, ox - tl, yp, ox, yp, ax.color, ax.width, "");
+            text(yl, yTickList[i].label, ox - (ax.yTicks ? tl : 0) - 3, yp, ax.yStyle, "right", "middle", 0);
         }
 
         // 値ラベル
         if (s.valueLabels.show) {
             var vg = g.groupItems.add(); vg.name = "value-labels";
+            var vs = s.valueLabels.style;
             for (i = 0; i < vlabels.length; i++) {
                 var L = vlabels[i];
                 var str = formatNumber(L.v, s.valueLabels.decimals, ax.thousands, ax.prefix, ax.suffix);
-                if (L.mid) text(vg, str, L.x, L.y, s.valueLabels.style, "center", "middle", 0);
-                else if (L.below) text(vg, str, L.x, L.y - 2, s.valueLabels.style, "center", "top", 0);
-                else text(vg, str, L.x, L.y + 2, s.valueLabels.style, "center", "bottom", 0);
+                if (L.pos === "mid") text(vg, str, L.x, L.y, vs, "center", "middle", 0);
+                else if (L.pos === "below") text(vg, str, L.x, L.y - 2, vs, "center", "top", 0);
+                else if (L.pos === "right") text(vg, str, L.x + 3, L.y, vs, "left", "middle", 0);
+                else if (L.pos === "left") text(vg, str, L.x - 3, L.y, vs, "right", "middle", 0);
+                else text(vg, str, L.x, L.y + 2, vs, "center", "bottom", 0);
             }
         }
 
@@ -693,7 +725,7 @@
         // --- タブ1: データ ---
         var t1 = tabs.add("tab", undefined, "データ・種類");
         t1.alignChildren = "left";
-        listField(t1, "グラフの種類", "type", ["棒グラフ", "積み上げ棒グラフ", "折れ線グラフ", "面グラフ"], ["bar", "stacked", "line", "area"]);
+        listField(t1, "グラフの種類", "type", ["棒グラフ", "積み上げ棒グラフ", "横棒グラフ", "横積み上げ棒グラフ", "折れ線グラフ", "面グラフ"], ["bar", "stacked", "hbar", "hstacked", "line", "area"]);
         t1.add("statictext", undefined, "データ（1行目=見出し、1列目=ラベル／カンマ or タブ区切り。Excel から貼り付け可）");
         var dataEt = t1.add("edittext", [0, 0, 490, 170], "", { multiline: true, scrolling: true, wantReturn: true });
         reg.push({ path: "data", ctrl: dataEt, kind: "text" });
@@ -802,10 +834,16 @@
         numField(a1, "軸の太さ", "axis.width", 4, "pt");
         var a2 = t3.add("group");
         numField(a2, "目盛りの長さ", "axis.tickLen", 4, "pt");
-        checkField(a2, "X 目盛り線", "axis.xTicks");
-        checkField(a2, "Y 軸線", "axis.showYAxisLine");
+        var a2b = t3.add("group");
+        a2b.add("statictext", undefined, "X 軸（下）:").preferredSize.width = 110;
+        checkField(a2b, "軸線", "axis.xAxisLine");
+        checkField(a2b, "目盛り線", "axis.xTicks");
+        var a2c = t3.add("group");
+        a2c.add("statictext", undefined, "Y 軸（左）:").preferredSize.width = 110;
+        checkField(a2c, "軸線", "axis.yAxisLine");
+        checkField(a2c, "目盛り線", "axis.yTicks");
         var a3 = t3.add("group");
-        textField(a3, "Y 最小/最大/間隔", "axis.yMin", 5).helpTip = "空欄で自動";
+        textField(a3, "値軸 最小/最大/間隔", "axis.yMin", 5).helpTip = "空欄で自動";
         var yMaxE = a3.add("edittext", undefined, ""); yMaxE.characters = 5; reg.push({ path: "axis.yMax", ctrl: yMaxE, kind: "text" });
         var yStepE = a3.add("edittext", undefined, ""); yStepE.characters = 5; reg.push({ path: "axis.yStep", ctrl: yStepE, kind: "text" });
         a3.add("statictext", undefined, "（空欄=自動）");
@@ -819,7 +857,8 @@
         numField(t3, "X ラベル回転", "axis.xRotate", 4, "°（例: 45）");
         var gp = t3.add("panel", undefined, "グリッド線");
         gp.orientation = "row";
-        checkField(gp, "表示", "grid.show");
+        checkField(gp, "縦線(X)", "grid.xShow");
+        checkField(gp, "横線(Y)", "grid.yShow");
         var gc = gp.add("edittext", undefined, ""); gc.characters = 9; reg.push({ path: "grid.color", ctrl: gc, kind: "text" });
         gp.add("button", undefined, "色…").onClick = function () { pickInto(gc); };
         gp.add("statictext", undefined, "幅");
