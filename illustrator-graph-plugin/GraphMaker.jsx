@@ -108,6 +108,17 @@
             barGap: 2,         // 同一カテゴリ内の棒同士の間隔(pt)
             plotBg: "none",
             plotFrame: { show: false, color: "#333333", width: 0.75, dash: "" },
+            pie: {
+                hole: 0,              // ドーナツの穴の大きさ(%)。0 で通常の円グラフ
+                startAngle: 0,        // 開始角度（12 時の位置が 0°）
+                clockwise: true,
+                borderColor: "#FFFFFF", borderWidth: 1,
+                labelPos: "outside",  // inside / outside / none
+                showName: true, showPercent: true, showValue: false,
+                pctDecimals: 0,
+                leader: true, leaderColor: "#666666", leaderWidth: 0.5,
+                labelStyle: textStyle(8)
+            },
             outerFrame: { show: false, color: "#333333", width: 0.75, dash: "", fill: "none", padding: 10, radius: 0 },
             series: [],
             valueLabels: { show: false, decimals: 0, style: textStyle(7) },
@@ -329,8 +340,15 @@
     // ------------------------------------------------------------------
     function drawGraph(s, ox, oy, container) {
         var d = parseData(s.data);
-        ensureSeries(s, d.names.length);
         var W = s.width, H = s.height;
+        if (s.type === "pie") {
+            ensureSeries(s, d.labels.length);
+            var pg = container.groupItems.add();
+            pg.name = "GraphMaker";
+            drawPie(s, d, pg, ox, oy, W, H);
+            return finishGraph(s, { names: d.labels }, pg, ox, oy, W, H);
+        }
+        ensureSeries(s, d.names.length);
         var n = d.labels.length, ns = d.names.length;
         var sc = computeScale(s, d);
         var ax = s.axis;
@@ -542,6 +560,11 @@
             text(g, ax.yTitle, ytx, oy - H / 2, ax.titleStyle, "right", "middle", 90).name = "y-title";
         }
 
+        return finishGraph(s, d, g, ox, oy, W, H);
+    }
+
+    // 凡例・タイトル・全体枠・設定の保存（全グラフ共通）
+    function finishGraph(s, d, g, ox, oy, W, H) {
         // 凡例
         if (s.legend.show) drawLegend(s, d, g, ox, oy, W, H);
 
@@ -565,6 +588,119 @@
 
         g.note = TAG + serialize(s);
         return g;
+    }
+
+    // ------------------------------------------------------------------
+    // 円グラフ（1 列目の値を使用。各行が 1 つの扇形）
+    // ------------------------------------------------------------------
+    function arcPoints(cx, cy, r, a0, a1) {
+        // a0 → a1 の円弧をベジェで近似した点列 [{a:anchor, l:left, r:right}]
+        var sweep = a1 - a0;
+        var m = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-9));
+        var dt = sweep / m;
+        var h = 4 / 3 * Math.tan(Math.abs(dt) / 4) * r;
+        var dir = sweep >= 0 ? 1 : -1;
+        var pts = [];
+        for (var i = 0; i <= m; i++) {
+            var t = a0 + dt * i;
+            var ax = cx + r * Math.cos(t), ay = cy + r * Math.sin(t);
+            var tx = -Math.sin(t) * dir * h, ty = Math.cos(t) * dir * h; // 進行方向の接線
+            pts.push({
+                a: [ax, ay],
+                l: i === 0 ? [ax, ay] : [ax - tx, ay - ty],
+                r: i === m ? [ax, ay] : [ax + tx, ay + ty]
+            });
+        }
+        return pts;
+    }
+
+    function addPoints(path, pts) {
+        for (var i = 0; i < pts.length; i++) {
+            var pp = path.pathPoints.add();
+            pp.anchor = pts[i].a;
+            pp.leftDirection = pts[i].l;
+            pp.rightDirection = pts[i].r;
+            pp.pointType = PointType.CORNER;
+        }
+    }
+
+    function drawPie(s, d, g, ox, oy, W, H) {
+        var P = s.pie;
+        var plot = g.pathItems.rectangle(oy, ox, W, H);
+        plot.name = "gm-plot";
+        setFill(plot, s.plotBg);
+        plot.stroked = false;
+
+        var vals = d.values[0], total = 0, i;
+        for (i = 0; i < vals.length; i++) if (vals[i] !== null && vals[i] > 0) total += vals[i];
+        if (total <= 0) throw new Error("円グラフには正の値が必要です（1 列目の値を使います）。");
+
+        var R = Math.min(W, H) / 2;
+        var r0 = R * Math.max(0, Math.min(95, P.hole)) / 100;
+        var cx = ox + W / 2, cy = oy - H / 2;
+        var dir = P.clockwise ? -1 : 1;
+        var ang = Math.PI / 2 - P.startAngle * Math.PI / 180 * (P.clockwise ? 1 : -1);
+
+        var sg = g.groupItems.add(); sg.name = "slices";
+        var labels = [];
+        for (i = 0; i < vals.length; i++) {
+            var v = vals[i];
+            if (v === null || v <= 0) continue;
+            var st = s.series[i];
+            var sweep = v / total * Math.PI * 2 * dir;
+            var a1 = ang + sweep, item;
+            if (Math.abs(sweep) >= Math.PI * 2 - 1e-6 && r0 === 0) {
+                item = sg.pathItems.ellipse(cy + R, cx - R, R * 2, R * 2);
+            } else if (Math.abs(sweep) >= Math.PI * 2 - 1e-6) {
+                item = sg.compoundPathItems.add();
+                var outer = item.pathItems.ellipse(cy + R, cx - R, R * 2, R * 2);
+                var inner = item.pathItems.ellipse(cy + r0, cx - r0, r0 * 2, r0 * 2);
+                inner.reversed = !outer.reversed;
+            } else {
+                item = sg.pathItems.add();
+                addPoints(item, arcPoints(cx, cy, R, ang, a1));
+                if (r0 > 0) addPoints(item, arcPoints(cx, cy, r0, a1, ang));
+                else addPoints(item, [{ a: [cx, cy], l: [cx, cy], r: [cx, cy] }]);
+                item.closed = true;
+            }
+            item.name = d.labels[i];
+            var tgt = item.typename === "CompoundPathItem" ? item.pathItems : [item];
+            for (var q = 0; q < tgt.length; q++) {
+                setFill(tgt[q], st.color);
+                setStroke(tgt[q], P.borderColor, P.borderWidth, "");
+            }
+            item.opacity = st.opacity;
+            labels.push({ i: i, v: v, mid: ang + sweep / 2 });
+            ang = a1;
+        }
+
+        // ラベル
+        if (P.labelPos === "none") return;
+        var lg = g.groupItems.add(); lg.name = "pie-labels";
+        for (var k = 0; k < labels.length; k++) {
+            var L = labels[k], parts = [];
+            if (P.showName) parts.push(d.labels[L.i]);
+            if (P.showPercent) parts.push(formatNumber(L.v / total * 100, P.pctDecimals, false, "", "%"));
+            if (P.showValue) parts.push(formatNumber(L.v, s.axis.decimals, s.axis.thousands, s.axis.prefix, s.axis.suffix));
+            if (!parts.length) continue;
+            var str = parts.join(" "), c = Math.cos(L.mid), sn = Math.sin(L.mid);
+            if (P.labelPos === "inside") {
+                var lr = r0 > 0 ? (r0 + R) / 2 : R * 0.62;
+                text(lg, str, cx + c * lr, cy + sn * lr, P.labelStyle, "center", "middle", 0);
+            } else {
+                var e1 = R + 4, e2 = R + 14;
+                var ex = cx + c * e2, ey = cy + sn * e2;
+                var right = c >= 0;
+                var hx = ex + (right ? 6 : -6);
+                if (P.leader) {
+                    var ln = lg.pathItems.add();
+                    ln.setEntirePath([[cx + c * e1, cy + sn * e1], [ex, ey], [hx, ey]]);
+                    ln.filled = false;
+                    setStroke(ln, P.leaderColor, P.leaderWidth, "");
+                }
+                text(lg, str, hx + (right ? 2 : -2), ey, P.labelStyle, right ? "left" : "right", "middle", 0);
+            }
+        }
     }
 
     function drawLegend(s, d, g, ox, oy, W, H) {
@@ -769,7 +905,7 @@
         // --- タブ1: データ ---
         var t1 = tabs.add("tab", undefined, "データ・種類");
         t1.alignChildren = "left";
-        listField(t1, "グラフの種類", "type", ["棒グラフ", "積み上げ棒グラフ", "横棒グラフ", "横積み上げ棒グラフ", "折れ線グラフ", "面グラフ"], ["bar", "stacked", "hbar", "hstacked", "line", "area"]);
+        var typeDD = listField(t1, "グラフの種類", "type", ["棒グラフ", "積み上げ棒グラフ", "横棒グラフ", "横積み上げ棒グラフ", "折れ線グラフ", "面グラフ", "円グラフ"], ["bar", "stacked", "hbar", "hstacked", "line", "area", "pie"]);
         t1.add("statictext", undefined, "データ（1行目=見出し、1列目=ラベル／カンマ or タブ区切り。Excel から貼り付け可）");
         var dataEt = t1.add("edittext", [0, 0, 490, 170], "", { multiline: true, scrolling: true, wantReturn: true });
         reg.push({ path: "data", ctrl: dataEt, kind: "text" });
@@ -845,7 +981,8 @@
         function refreshSeriesList() {
             storeSeries();
             var names;
-            try { names = parseData(dataEt.text).names; } catch (e) { names = []; }
+            var isPie = typeDD.selection && typeDD.selection.index === 6;
+            try { var pd0 = parseData(dataEt.text); names = isPie ? pd0.labels : pd0.names; } catch (e) { names = []; }
             ensureSeries(s, names.length);
             var keep = Math.max(0, Math.min(curSeries, names.length - 1));
             seriesDD.removeAll();
@@ -936,6 +1073,34 @@
         styleField(lp, "凡例の文字", "legend.style");
 
         // --- タブ5: 枠 ---
+        // --- タブ: 円グラフ ---
+        var t6 = tabs.add("tab", undefined, "円グラフ");
+        t6.alignChildren = "left";
+        t6.add("statictext", undefined, "※ データの 1 列目の値を使います。各行が 1 つの扇形になり、色は「系列スタイル」で行ごとに設定します。");
+        var pp1 = t6.add("group");
+        numField(pp1, "ドーナツの穴", "pie.hole", 4, "%（0 で円）");
+        var pp2 = t6.add("group");
+        numField(pp2, "開始角度", "pie.startAngle", 4, "°（12時=0）");
+        checkField(pp2, "時計回り", "pie.clockwise");
+        var pp3 = t6.add("group");
+        colorField(pp3, "扇の境界線", "pie.borderColor");
+        numField(pp3, "幅", "pie.borderWidth", 4, "pt").parent.children[0].preferredSize.width = 30;
+        var plp = t6.add("panel", undefined, "ラベル");
+        plp.alignChildren = "left";
+        listField(plp, "位置", "pie.labelPos", ["外側", "内側", "表示しない"], ["outside", "inside", "none"]);
+        var pl2 = plp.add("group");
+        checkField(pl2, "項目名", "pie.showName");
+        checkField(pl2, "割合(%)", "pie.showPercent");
+        checkField(pl2, "値", "pie.showValue");
+        numField(pl2, "% の小数桁", "pie.pctDecimals", 3).parent.children[0].preferredSize.width = 70;
+        var pl3 = plp.add("group");
+        checkField(pl3, "引き出し線", "pie.leader");
+        var lcE = pl3.add("edittext", undefined, ""); lcE.characters = 9; reg.push({ path: "pie.leaderColor", ctrl: lcE, kind: "text" });
+        pl3.add("button", undefined, "色…").onClick = function () { pickInto(lcE); };
+        pl3.add("statictext", undefined, "幅");
+        var lwE = pl3.add("edittext", undefined, ""); lwE.characters = 4; reg.push({ path: "pie.leaderWidth", ctrl: lwE, kind: "num" });
+        styleField(plp, "ラベルの文字", "pie.labelStyle");
+
         var t5 = tabs.add("tab", undefined, "枠");
         t5.alignChildren = "left";
         var fp1 = t5.add("panel", undefined, "プロット領域の枠");
@@ -989,6 +1154,7 @@
 
         tabs.onChange = function () { if (tabs.selection === t2) refreshSeriesList(); };
         dataEt.onChange = refreshSeriesList;
+        typeDD.onChange = refreshSeriesList;
 
         function validate() {
             fromUI();
