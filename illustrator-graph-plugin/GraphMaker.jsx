@@ -823,138 +823,165 @@
         dlg.orientation = "column";
         dlg.alignChildren = "fill";
 
+        var LABEL_W = 90;
+
+        // ---------- 部品 ----------
         function row(parent, label, labelW) {
             var g = parent.add("group");
             g.orientation = "row";
             g.alignChildren = "center";
-            var st = g.add("statictext", undefined, label);
-            st.preferredSize.width = labelW || 110;
+            g.spacing = 6;
+            if (label !== null) {
+                var st = g.add("statictext", undefined, label);
+                st.preferredSize.width = labelW || LABEL_W;
+            }
             return g;
         }
-        function numField(parent, label, path, chars, unit) {
-            var g = row(parent, label);
-            var e = g.add("edittext", undefined, "");
-            e.characters = chars || 6;
-            if (unit) g.add("statictext", undefined, unit);
-            reg.push({ path: path, ctrl: e, kind: "num" });
-            return e;
-        }
-        function textField(parent, label, path, chars) {
-            var g = row(parent, label);
-            var e = g.add("edittext", undefined, "");
-            e.characters = chars || 20;
-            reg.push({ path: path, ctrl: e, kind: "text" });
-            return e;
-        }
-        function colorField(parent, label, path) {
-            var g = row(parent, label);
-            var e = g.add("edittext", undefined, "");
-            e.characters = 9;
-            e.helpTip = "#RRGGBB 形式、または none";
-            var b = g.add("button", undefined, "選択…");
-            b.preferredSize.width = 60;
-            b.onClick = function () {
-                var c = makeColor(e.text) || makeColor("#000000");
-                var r = app.showColorPicker(c);
-                var hx = r ? colorToHex(r) : null;
-                if (hx) e.text = hx;
-            };
-            reg.push({ path: path, ctrl: e, kind: "text" });
-            return e;
-        }
-        function checkField(parent, label, path) {
-            var c = parent.add("checkbox", undefined, label);
-            reg.push({ path: path, ctrl: c, kind: "bool" });
-            return c;
-        }
-        function listField(parent, label, path, labels, values) {
-            var g = row(parent, label);
-            var dd = g.add("dropdownlist", undefined, labels);
-            reg.push({ path: path, ctrl: dd, kind: "list", values: values });
-            return dd;
-        }
-        function styleField(parent, label, path) {
-            var p = parent.add("panel", undefined, label);
+        function panel(parent, title) {
+            var p = parent.add("panel", undefined, title);
+            p.orientation = "column";
             p.alignChildren = "left";
-            p.margins = [10, 14, 10, 8];
-            var g = row(p, "フォント", 60);
-            var fe = g.add("edittext", undefined, "");
-            fe.characters = 22;
-            fe.helpTip = "PostScript 名。空欄で Illustrator の既定フォント";
-            g.add("button", undefined, "…").onClick = function () { fe.text = pickFont(fe.text); };
-            reg.push({ path: path + ".font", ctrl: fe, kind: "text" });
-            var g2 = p.add("group");
-            var st = g2.add("statictext", undefined, "サイズ"); st.preferredSize.width = 60;
-            var se = g2.add("edittext", undefined, ""); se.characters = 5;
-            g2.add("statictext", undefined, "pt   色");
-            reg.push({ path: path + ".size", ctrl: se, kind: "num" });
-            var ce = g2.add("edittext", undefined, ""); ce.characters = 9;
-            g2.add("button", undefined, "選択…").onClick = function () {
-                var r = app.showColorPicker(makeColor(ce.text) || makeColor("#000000"));
-                var hx = r ? colorToHex(r) : null;
-                if (hx) ce.text = hx;
-            };
-            reg.push({ path: path + ".color", ctrl: ce, kind: "text" });
+            p.alignment = "fill";
+            p.margins = [12, 16, 12, 10];
+            p.spacing = 6;
             return p;
         }
-
-        var tabs = dlg.add("tabbedpanel");
-        tabs.alignChildren = "fill";
-        tabs.preferredSize = [520, 470];
-
-        // --- タブ1: データ ---
-        var t1 = tabs.add("tab", undefined, "データ・種類");
-        t1.alignChildren = "left";
-        var typeDD = listField(t1, "グラフの種類", "type", ["棒グラフ", "積み上げ棒グラフ", "横棒グラフ", "横積み上げ棒グラフ", "折れ線グラフ", "面グラフ", "円グラフ"], ["bar", "stacked", "hbar", "hstacked", "line", "area", "pie"]);
-        t1.add("statictext", undefined, "データ（1行目=見出し、1列目=ラベル／カンマ or タブ区切り。Excel から貼り付け可）");
-        var dataEt = t1.add("edittext", [0, 0, 490, 170], "", { multiline: true, scrolling: true, wantReturn: true });
-        reg.push({ path: "data", ctrl: dataEt, kind: "text" });
-        var sz = t1.add("group");
-        numField(sz, "プロット幅", "width", 6, "pt");
-        numField(sz, "高さ", "height", 6, "pt");
-        var bgp = t1.add("group");
-        numField(bgp, "棒の太さ", "barRatio", 5, "%（カテゴリ幅比）");
-        numField(bgp, "棒の間隔", "barGap", 4, "pt");
-        colorField(t1, "プロット背景色", "plotBg");
-        var vp = t1.add("panel", undefined, "値ラベル");
-        vp.alignChildren = "left";
-        var vg = vp.add("group");
-        checkField(vg, "値を表示", "valueLabels.show");
-        numField(vg, "小数桁数", "valueLabels.decimals", 3);
-        styleField(vp, "値ラベルの文字", "valueLabels.style");
-
-        // --- タブ2: 系列 ---
-        var t2 = tabs.add("tab", undefined, "系列スタイル");
-        t2.alignChildren = "left";
-        var selRow = row(t2, "系列");
-        var seriesDD = selRow.add("dropdownlist", undefined, []);
-        seriesDD.preferredSize.width = 220;
-        var sp = t2.add("panel", undefined, "スタイル");
-        sp.alignChildren = "left";
-        var sColor = row(sp, "色（塗り/線）").add("edittext", undefined, ""); sColor.characters = 9;
-        sColor.parent.add("button", undefined, "選択…").onClick = function () { pickInto(sColor); };
-        var sLineW = row(sp, "線幅（折れ線）").add("edittext", undefined, ""); sLineW.characters = 5;
-        sLineW.parent.add("statictext", undefined, "pt");
-        var sDash = row(sp, "破線").add("edittext", undefined, ""); sDash.characters = 10;
-        sDash.parent.add("statictext", undefined, "例: 4,2（空欄で実線）");
-        var sBorder = row(sp, "枠線の色").add("edittext", undefined, ""); sBorder.characters = 9;
-        sBorder.parent.add("button", undefined, "選択…").onClick = function () { pickInto(sBorder); };
-        var sBorderW = row(sp, "枠線の幅").add("edittext", undefined, ""); sBorderW.characters = 5;
-        sBorderW.parent.add("statictext", undefined, "pt");
-        var sMarker = row(sp, "マーカー").add("dropdownlist", undefined, ["なし", "円", "四角", "ひし形"]);
-        var MARKERS = ["none", "circle", "square", "diamond"];
-        var sMarkerSize = row(sp, "マーカーサイズ").add("edittext", undefined, ""); sMarkerSize.characters = 5;
-        sMarkerSize.parent.add("statictext", undefined, "pt");
-        var sOpacity = row(sp, "不透明度").add("edittext", undefined, ""); sOpacity.characters = 5;
-        sOpacity.parent.add("statictext", undefined, "%");
-        t2.add("statictext", undefined, "※ 色は #RRGGBB 形式。枠線を付けない場合は none");
-        var applyAll = t2.add("button", undefined, "この系列の線幅・マーカー・枠線を全系列に適用");
-
+        function hint(parent, str) {
+            var t = parent.add("statictext", undefined, str);
+            t.graphics.foregroundColor = t.graphics.newPen(t.graphics.PenType.SOLID_COLOR, [0.45, 0.45, 0.45], 1);
+            return t;
+        }
         function pickInto(e) {
             var r = app.showColorPicker(makeColor(e.text) || makeColor("#000000"));
             var hx = r ? colorToHex(r) : null;
             if (hx) e.text = hx;
         }
+        // 以下の add* はすべて既存の行 g に部品を追加する
+        function addNum(g, path, chars, unit) {
+            var e = g.add("edittext", undefined, "");
+            e.characters = chars || 5;
+            if (unit) g.add("statictext", undefined, unit);
+            if (path) reg.push({ path: path, ctrl: e, kind: "num" });
+            return e;
+        }
+        function addText(g, path, chars) {
+            var e = g.add("edittext", undefined, "");
+            e.characters = chars || 20;
+            if (path) reg.push({ path: path, ctrl: e, kind: "text" });
+            return e;
+        }
+        function addColor(g, path) {
+            var e = g.add("edittext", undefined, "");
+            e.characters = 8;
+            e.helpTip = "#RRGGBB 形式。なしにする場合は none";
+            var b = g.add("button", undefined, "…");
+            b.preferredSize = [26, 22];
+            b.helpTip = "カラーピッカーで選択";
+            b.onClick = function () { pickInto(e); };
+            if (path) reg.push({ path: path, ctrl: e, kind: "text" });
+            return e;
+        }
+        function addCheck(g, label, path) {
+            var c = g.add("checkbox", undefined, label);
+            if (path) reg.push({ path: path, ctrl: c, kind: "bool" });
+            return c;
+        }
+        function addList(g, path, labels, values) {
+            var dd = g.add("dropdownlist", undefined, labels);
+            reg.push({ path: path, ctrl: dd, kind: "list", values: values });
+            return dd;
+        }
+        // 線のスタイル 1 行: [✓ ラベル]  色 [#xxxxxx][…]  幅 [ ]pt  破線 [ ]
+        function lineRow(parent, label, base, keys) {
+            var g = row(parent, keys.show ? null : label);
+            if (keys.show) {
+                var c = addCheck(g, label, base + keys.show);
+                c.preferredSize.width = LABEL_W;
+            }
+            g.add("statictext", undefined, "色");
+            addColor(g, base + keys.color);
+            g.add("statictext", undefined, "幅");
+            addNum(g, base + keys.width, 4, "pt");
+            if (keys.dash) {
+                g.add("statictext", undefined, "破線");
+                addText(g, base + keys.dash, 5).helpTip = "例: 4,2（空欄で実線）";
+            }
+            return g;
+        }
+
+        var tabs = dlg.add("tabbedpanel");
+        tabs.alignChildren = "fill";
+        tabs.preferredSize = [560, 430];
+        function tab(title) {
+            var t = tabs.add("tab", undefined, title);
+            t.orientation = "column";
+            t.alignChildren = "fill";
+            t.margins = [12, 12, 12, 12];
+            t.spacing = 8;
+            return t;
+        }
+
+        // ================= 1. 基本 =================
+        var tBasic = tab("基本");
+        var r;
+        r = row(tBasic, "グラフの種類");
+        var TYPES = ["bar", "stacked", "hbar", "hstacked", "line", "area", "pie"];
+        var typeDD = addList(r, "type", ["棒グラフ", "積み上げ棒グラフ", "横棒グラフ", "横積み上げ棒グラフ", "折れ線グラフ", "面グラフ", "円グラフ"], TYPES);
+
+        var pData = panel(tBasic, "データ");
+        hint(pData, "1 行目＝系列名、1 列目＝項目名。カンマ区切り、または Excel からそのまま貼り付け");
+        var dataEt = pData.add("edittext", [0, 0, 520, 150], "", { multiline: true, scrolling: true, wantReturn: true });
+        reg.push({ path: "data", ctrl: dataEt, kind: "text" });
+
+        r = row(tBasic, "サイズ");
+        addNum(r, "width", 5, "×");
+        addNum(r, "height", 5, "pt（グラフ本体の幅×高さ）");
+        r = row(tBasic, "タイトル");
+        addText(r, "title.text", 36);
+        r = row(tBasic, "凡例");
+        addCheck(r, "表示", "legend.show");
+        addList(r, "legend.position", ["右", "上", "下"], ["right", "top", "bottom"]);
+
+        // ================= 2. 色・系列 =================
+        var tSeries = tab("色・系列");
+        r = row(tSeries, "系列");
+        var seriesDD = r.add("dropdownlist", undefined, []);
+        seriesDD.preferredSize.width = 260;
+        var seriesHint = hint(tSeries, "");
+        seriesHint.preferredSize.width = 520;
+
+        var pFill = panel(tSeries, "色");
+        r = row(pFill, "色");
+        var sColor = addColor(r, null);
+        r.add("statictext", undefined, "   不透明度");
+        var sOpacity = addNum(r, null, 4, "%");
+        r = row(pFill, "縁取り");
+        r.add("statictext", undefined, "色");
+        var sBorder = addColor(r, null);
+        r.add("statictext", undefined, "幅");
+        var sBorderW = addNum(r, null, 4, "pt");
+
+        var pLine = panel(tSeries, "線とマーカー（折れ線・面）");
+        r = row(pLine, "線");
+        r.add("statictext", undefined, "幅");
+        var sLineW = addNum(r, null, 4, "pt");
+        r.add("statictext", undefined, "破線");
+        var sDash = addText(r, null, 5);
+        sDash.helpTip = "例: 4,2（空欄で実線）";
+        r = row(pLine, "マーカー");
+        var MARKERS = ["none", "circle", "square", "diamond"];
+        var sMarker = r.add("dropdownlist", undefined, ["なし", "円", "四角", "ひし形"]);
+        r.add("statictext", undefined, "サイズ");
+        var sMarkerSize = addNum(r, null, 4, "pt");
+
+        var pBar = panel(tSeries, "棒（全系列共通）");
+        r = row(pBar, "棒の太さ");
+        addNum(r, "barRatio", 4, "%（項目の幅に対して）");
+        r = row(pBar, "棒の間隔");
+        addNum(r, "barGap", 4, "pt");
+
+        var applyAll = tSeries.add("button", undefined, "この系列の不透明度・縁取り・線・マーカーを全系列にコピー");
+        applyAll.alignment = "left";
 
         var curSeries = -1;
         function storeSeries() {
@@ -978,10 +1005,10 @@
             for (var m = 0; m < MARKERS.length; m++) if (MARKERS[m] === st.marker) sMarker.selection = m;
             sMarkerSize.text = st.markerSize; sOpacity.text = st.opacity;
         }
+        function curType() { return TYPES[typeDD.selection ? typeDD.selection.index : 0]; }
         function refreshSeriesList() {
             storeSeries();
-            var names;
-            var isPie = typeDD.selection && typeDD.selection.index === 6;
+            var names, isPie = curType() === "pie";
             try { var pd0 = parseData(dataEt.text); names = isPie ? pd0.labels : pd0.names; } catch (e) { names = []; }
             ensureSeries(s, names.length);
             var keep = Math.max(0, Math.min(curSeries, names.length - 1));
@@ -1007,154 +1034,192 @@
             }
         };
 
-        // --- タブ3: 軸・目盛り ---
-        var t3 = tabs.add("tab", undefined, "軸・目盛り");
-        t3.alignChildren = "left";
-        var a1 = t3.add("group");
-        colorField(a1, "軸の色", "axis.color");
-        numField(a1, "軸の太さ", "axis.width", 4, "pt");
-        var a2 = t3.add("group");
-        numField(a2, "目盛りの長さ", "axis.tickLen", 4, "pt");
-        var a2b = t3.add("group");
-        a2b.add("statictext", undefined, "X 軸（下）:").preferredSize.width = 110;
-        checkField(a2b, "軸線", "axis.xAxisLine");
-        checkField(a2b, "目盛り線", "axis.xTicks");
-        var a2c = t3.add("group");
-        a2c.add("statictext", undefined, "Y 軸（左）:").preferredSize.width = 110;
-        checkField(a2c, "軸線", "axis.yAxisLine");
-        checkField(a2c, "目盛り線", "axis.yTicks");
-        var a3 = t3.add("group");
-        textField(a3, "値軸 最小/最大/間隔", "axis.yMin", 5).helpTip = "空欄で自動";
-        var yMaxE = a3.add("edittext", undefined, ""); yMaxE.characters = 5; reg.push({ path: "axis.yMax", ctrl: yMaxE, kind: "text" });
-        var yStepE = a3.add("edittext", undefined, ""); yStepE.characters = 5; reg.push({ path: "axis.yStep", ctrl: yStepE, kind: "text" });
-        a3.add("statictext", undefined, "（空欄=自動）");
-        var a4 = t3.add("group");
-        numField(a4, "小数桁数", "axis.decimals", 3);
-        checkField(a4, "3桁区切り", "axis.thousands");
-        var a5 = t3.add("group");
-        textField(a5, "接頭辞/接尾辞", "axis.prefix", 5);
-        var sufE = a5.add("edittext", undefined, ""); sufE.characters = 5; reg.push({ path: "axis.suffix", ctrl: sufE, kind: "text" });
-        a5.add("statictext", undefined, "例: ¥ / %");
-        numField(t3, "X ラベル回転", "axis.xRotate", 4, "°（例: 45）");
-        listField(t3, "項目ラベルの揃え", "axis.catAlign", ["左揃え", "中央揃え", "右揃え"], ["left", "center", "right"]).helpTip = "横棒グラフの左側に並ぶ項目名の揃え方";
-        var gp = t3.add("panel", undefined, "グリッド線");
-        gp.alignChildren = "left";
-        function gridRow(label, key) {
-            var r = gp.add("group");
-            checkField(r, label, "grid." + key + "Show").preferredSize.width = 80;
-            r.add("statictext", undefined, "色");
-            var c = r.add("edittext", undefined, ""); c.characters = 9; reg.push({ path: "grid." + key + "Color", ctrl: c, kind: "text" });
-            r.add("button", undefined, "選択…").onClick = function () { pickInto(c); };
-            r.add("statictext", undefined, "幅");
-            var w = r.add("edittext", undefined, ""); w.characters = 4; reg.push({ path: "grid." + key + "Width", ctrl: w, kind: "num" });
-            r.add("statictext", undefined, "pt  破線");
-            var dd = r.add("edittext", undefined, ""); dd.characters = 6; reg.push({ path: "grid." + key + "Dash", ctrl: dd, kind: "text" });
+        // ================= 3. 軸・目盛り =================
+        var tAxis = tab("軸・目盛り");
+        var pRange = panel(tAxis, "数値の目盛り");
+        r = row(pRange, "範囲");
+        r.add("statictext", undefined, "最小");
+        addText(r, "axis.yMin", 5);
+        r.add("statictext", undefined, "最大");
+        addText(r, "axis.yMax", 5);
+        r.add("statictext", undefined, "間隔");
+        addText(r, "axis.yStep", 5);
+        hint(r, "空欄＝自動");
+        r = row(pRange, "表示形式");
+        r.add("statictext", undefined, "小数");
+        addNum(r, "axis.decimals", 2, "桁");
+        addCheck(r, "3桁区切り", "axis.thousands");
+        r.add("statictext", undefined, "  前に");
+        addText(r, "axis.prefix", 3);
+        r.add("statictext", undefined, "後に");
+        addText(r, "axis.suffix", 3);
+        r = row(pRange, "値ラベル");
+        addCheck(r, "棒・点に値を表示", "valueLabels.show");
+        r.add("statictext", undefined, "  小数");
+        addNum(r, "valueLabels.decimals", 2, "桁");
+
+        var pLines = panel(tAxis, "軸線と目盛り線");
+        r = row(pLines, "X 軸（下）");
+        addCheck(r, "軸線", "axis.xAxisLine");
+        addCheck(r, "目盛り線", "axis.xTicks");
+        r = row(pLines, "Y 軸（左）");
+        addCheck(r, "軸線", "axis.yAxisLine");
+        addCheck(r, "目盛り線", "axis.yTicks");
+        r = lineRow(pLines, "線の見た目", "axis.", { color: "color", width: "width" });
+        r.add("statictext", undefined, "目盛りの長さ");
+        addNum(r, "axis.tickLen", 3, "pt");
+
+        var pGrid = panel(tAxis, "グリッド線");
+        lineRow(pGrid, "縦線", "grid.", { show: "xShow", color: "xColor", width: "xWidth", dash: "xDash" });
+        lineRow(pGrid, "横線", "grid.", { show: "yShow", color: "yColor", width: "yWidth", dash: "yDash" });
+
+        var pAxLabel = panel(tAxis, "ラベル");
+        r = row(pAxLabel, "軸タイトル");
+        r.add("statictext", undefined, "X");
+        addText(r, "axis.xTitle", 14);
+        r.add("statictext", undefined, "Y");
+        addText(r, "axis.yTitle", 14);
+        r = row(pAxLabel, "X ラベル");
+        addNum(r, "axis.xRotate", 3, "°回転");
+        r.add("statictext", undefined, "   横棒の項目名");
+        addList(r, "axis.catAlign", ["左揃え", "中央揃え", "右揃え"], ["left", "center", "right"]);
+
+        // ================= 4. 円グラフ =================
+        var tPie = tab("円グラフ");
+        hint(tPie, "データの 1 列目の値を使います。扇ごとの色は「色・系列」タブで設定します。");
+        var pPieShape = panel(tPie, "形");
+        r = row(pPieShape, "ドーナツの穴");
+        addNum(r, "pie.hole", 3, "%（0 で普通の円）");
+        r = row(pPieShape, "開始位置");
+        addNum(r, "pie.startAngle", 3, "°（12 時＝0）");
+        addCheck(r, "時計回り", "pie.clockwise");
+        lineRow(pPieShape, "扇の境界線", "pie.", { color: "borderColor", width: "borderWidth" });
+        var pPieLabel = panel(tPie, "ラベル");
+        r = row(pPieLabel, "位置");
+        addList(r, "pie.labelPos", ["外側", "内側", "表示しない"], ["outside", "inside", "none"]);
+        r = row(pPieLabel, "内容");
+        addCheck(r, "項目名", "pie.showName");
+        addCheck(r, "割合(%)", "pie.showPercent");
+        addCheck(r, "値", "pie.showValue");
+        r.add("statictext", undefined, "  % の小数");
+        addNum(r, "pie.pctDecimals", 2, "桁");
+        lineRow(pPieLabel, "引き出し線", "pie.", { show: "leader", color: "leaderColor", width: "leaderWidth" });
+
+        // ================= 5. 文字 =================
+        var tText = tab("文字");
+        var STYLES = [
+            ["タイトル", "title.style"], ["X 軸の目盛り", "axis.xStyle"], ["Y 軸の目盛り", "axis.yStyle"],
+            ["軸タイトル", "axis.titleStyle"], ["凡例", "legend.style"], ["値ラベル", "valueLabels.style"],
+            ["円グラフのラベル", "pie.labelStyle"]
+        ];
+        var styleNames = [];
+        for (var si = 0; si < STYLES.length; si++) styleNames.push(STYLES[si][0]);
+        r = row(tText, "対象");
+        var styleDD = r.add("dropdownlist", undefined, styleNames);
+        styleDD.preferredSize.width = 200;
+        var pStyle = panel(tText, "文字のスタイル");
+        r = row(pStyle, "フォント");
+        var fFont = addText(r, null, 26);
+        fFont.helpTip = "PostScript 名。空欄で Illustrator の既定フォント";
+        r.add("button", undefined, "選択…").onClick = function () { fFont.text = pickFont(fFont.text); };
+        r = row(pStyle, "サイズ");
+        var fSize = addNum(r, null, 4, "pt");
+        r = row(pStyle, "色");
+        var fColor = addColor(r, null);
+        var fontAll = tText.add("button", undefined, "このフォントをすべての文字に適用");
+        fontAll.alignment = "left";
+
+        var curStyle = -1;
+        function storeStyle() {
+            if (curStyle < 0) return;
+            var st = getPath(s, STYLES[curStyle][1]);
+            st.font = trim(fFont.text);
+            st.size = Math.max(0.1, num(fSize.text, st.size));
+            st.color = trim(fColor.text) || st.color;
         }
-        gridRow("縦線(X)", "x");
-        gridRow("横線(Y)", "y");
-        var stRow = t3.add("group");
-        stRow.alignChildren = "top";
-        styleField(stRow, "X 目盛りの文字", "axis.xStyle");
-        styleField(stRow, "Y 目盛りの文字", "axis.yStyle");
-        var atRow = t3.add("group");
-        textField(atRow, "X 軸タイトル", "axis.xTitle", 12);
-        textField(atRow, "Y 軸タイトル", "axis.yTitle", 12).parent.children[0].preferredSize.width = 70;
-        styleField(t3, "軸タイトルの文字", "axis.titleStyle");
+        function loadStyle(i) {
+            curStyle = i;
+            var st = getPath(s, STYLES[i][1]);
+            fFont.text = st.font; fSize.text = st.size; fColor.text = st.color;
+        }
+        styleDD.onChange = function () {
+            if (!styleDD.selection) return;
+            storeStyle();
+            loadStyle(styleDD.selection.index);
+        };
+        fontAll.onClick = function () {
+            storeStyle();
+            for (var i = 0; i < STYLES.length; i++) getPath(s, STYLES[i][1]).font = trim(fFont.text);
+        };
 
-        // --- タブ4: タイトル・凡例 ---
-        var t4 = tabs.add("tab", undefined, "タイトル・凡例");
-        t4.alignChildren = "left";
-        textField(t4, "グラフタイトル", "title.text", 30);
-        styleField(t4, "タイトルの文字", "title.style");
-        var lp = t4.add("panel", undefined, "凡例");
-        lp.alignChildren = "left";
-        checkField(lp, "凡例を表示", "legend.show");
-        listField(lp, "位置", "legend.position", ["右", "上", "下"], ["right", "top", "bottom"]);
-        styleField(lp, "凡例の文字", "legend.style");
+        // ================= 6. 枠・背景 =================
+        var tFrame = tab("枠・背景");
+        var pPlot = panel(tFrame, "グラフ本体（プロット領域）");
+        r = row(pPlot, "背景色");
+        addColor(r, "plotBg");
+        lineRow(pPlot, "枠線", "plotFrame.", { show: "show", color: "color", width: "width", dash: "dash" });
+        var pOuter = panel(tFrame, "グラフ全体（タイトル・凡例を含む）");
+        lineRow(pOuter, "枠線", "outerFrame.", { show: "show", color: "color", width: "width", dash: "dash" });
+        r = row(pOuter, "塗り");
+        addColor(r, "outerFrame.fill");
+        r = row(pOuter, "余白");
+        addNum(r, "outerFrame.padding", 4, "pt");
+        r.add("statictext", undefined, "   角丸");
+        addNum(r, "outerFrame.radius", 4, "pt");
 
-        // --- タブ5: 枠 ---
-        // --- タブ: 円グラフ ---
-        var t6 = tabs.add("tab", undefined, "円グラフ");
-        t6.alignChildren = "left";
-        t6.add("statictext", undefined, "※ データの 1 列目の値を使います。各行が 1 つの扇形になり、色は「系列スタイル」で行ごとに設定します。");
-        var pp1 = t6.add("group");
-        numField(pp1, "ドーナツの穴", "pie.hole", 4, "%（0 で円）");
-        var pp2 = t6.add("group");
-        numField(pp2, "開始角度", "pie.startAngle", 4, "°（12時=0）");
-        checkField(pp2, "時計回り", "pie.clockwise");
-        var pp3 = t6.add("group");
-        colorField(pp3, "扇の境界線", "pie.borderColor");
-        numField(pp3, "幅", "pie.borderWidth", 4, "pt").parent.children[0].preferredSize.width = 30;
-        var plp = t6.add("panel", undefined, "ラベル");
-        plp.alignChildren = "left";
-        listField(plp, "位置", "pie.labelPos", ["外側", "内側", "表示しない"], ["outside", "inside", "none"]);
-        var pl2 = plp.add("group");
-        checkField(pl2, "項目名", "pie.showName");
-        checkField(pl2, "割合(%)", "pie.showPercent");
-        checkField(pl2, "値", "pie.showValue");
-        numField(pl2, "% の小数桁", "pie.pctDecimals", 3).parent.children[0].preferredSize.width = 70;
-        var pl3 = plp.add("group");
-        checkField(pl3, "引き出し線", "pie.leader");
-        var lcE = pl3.add("edittext", undefined, ""); lcE.characters = 9; reg.push({ path: "pie.leaderColor", ctrl: lcE, kind: "text" });
-        pl3.add("button", undefined, "色…").onClick = function () { pickInto(lcE); };
-        pl3.add("statictext", undefined, "幅");
-        var lwE = pl3.add("edittext", undefined, ""); lwE.characters = 4; reg.push({ path: "pie.leaderWidth", ctrl: lwE, kind: "num" });
-        styleField(plp, "ラベルの文字", "pie.labelStyle");
-
-        var t5 = tabs.add("tab", undefined, "枠");
-        t5.alignChildren = "left";
-        var fp1 = t5.add("panel", undefined, "プロット領域の枠");
-        fp1.alignChildren = "left";
-        checkField(fp1, "枠を表示", "plotFrame.show");
-        colorField(fp1, "線の色", "plotFrame.color");
-        numField(fp1, "線の幅", "plotFrame.width", 5, "pt");
-        textField(fp1, "破線", "plotFrame.dash", 8).helpTip = "例: 4,2（空欄で実線）";
-        var fp2 = t5.add("panel", undefined, "グラフ全体の枠");
-        fp2.alignChildren = "left";
-        checkField(fp2, "枠を表示", "outerFrame.show");
-        colorField(fp2, "線の色", "outerFrame.color");
-        numField(fp2, "線の幅", "outerFrame.width", 5, "pt");
-        textField(fp2, "破線", "outerFrame.dash", 8).helpTip = "例: 4,2（空欄で実線）";
-        colorField(fp2, "塗り", "outerFrame.fill");
-        numField(fp2, "余白", "outerFrame.padding", 5, "pt");
-        numField(fp2, "角丸の半径", "outerFrame.radius", 5, "pt（0 で角丸なし）");
-
-        // --- ボタン ---
+        // ---------- ボタン ----------
         var btns = dlg.add("group");
         btns.alignment = "right";
         var prevBtn = btns.add("button", undefined, "プレビュー");
         btns.add("button", undefined, "キャンセル", { name: "cancel" });
-        btns.add("button", undefined, isEdit ? "更新" : "作成", { name: "ok" });
+        var okBtn = btns.add("button", undefined, isEdit ? "更新" : "作成", { name: "ok" });
+
+        // 種類に関係ない項目はグレーアウト
+        function updateEnabled() {
+            var t = curType();
+            var pie = t === "pie", bar = t === "bar" || t === "stacked" || t === "hbar" || t === "hstacked";
+            var line = t === "line" || t === "area";
+            pBar.enabled = bar;
+            pLine.enabled = line;
+            pRange.enabled = pLines.enabled = pGrid.enabled = pAxLabel.enabled = !pie;
+            pPieShape.enabled = pPieLabel.enabled = pie;
+            seriesHint.text = pie ? "円グラフでは「系列」は各項目（扇）になります。"
+                                  : "データの 2 列目以降が系列です。系列を選んで色などを設定します。";
+        }
 
         // UI ⇔ 設定
         function toUI() {
             for (var i = 0; i < reg.length; i++) {
-                var r = reg[i], v = getPath(s, r.path);
-                if (r.kind === "bool") r.ctrl.value = !!v;
-                else if (r.kind === "list") {
-                    for (var j = 0; j < r.values.length; j++) if (r.values[j] === v) r.ctrl.selection = j;
-                    if (!r.ctrl.selection) r.ctrl.selection = 0;
-                } else r.ctrl.text = String(v);
+                var rr = reg[i], v = getPath(s, rr.path);
+                if (rr.kind === "bool") rr.ctrl.value = !!v;
+                else if (rr.kind === "list") {
+                    for (var j = 0; j < rr.values.length; j++) if (rr.values[j] === v) rr.ctrl.selection = j;
+                    if (!rr.ctrl.selection) rr.ctrl.selection = 0;
+                } else rr.ctrl.text = String(v);
             }
             refreshSeriesList();
+            styleDD.selection = 0;
+            loadStyle(0);
+            updateEnabled();
         }
         function fromUI() {
             for (var i = 0; i < reg.length; i++) {
-                var r = reg[i];
-                if (r.kind === "bool") setPath(s, r.path, r.ctrl.value);
-                else if (r.kind === "list") setPath(s, r.path, r.values[r.ctrl.selection ? r.ctrl.selection.index : 0]);
-                else if (r.kind === "num") setPath(s, r.path, num(r.ctrl.text, getPath(s, r.path)));
-                else setPath(s, r.path, r.ctrl.text);
+                var rr = reg[i];
+                if (rr.kind === "bool") setPath(s, rr.path, rr.ctrl.value);
+                else if (rr.kind === "list") setPath(s, rr.path, rr.values[rr.ctrl.selection ? rr.ctrl.selection.index : 0]);
+                else if (rr.kind === "num") setPath(s, rr.path, num(rr.ctrl.text, getPath(s, rr.path)));
+                else setPath(s, rr.path, rr.ctrl.text);
             }
             storeSeries();
+            storeStyle();
             if (s.width <= 0) s.width = 100;
             if (s.height <= 0) s.height = 100;
             s.barRatio = Math.max(1, Math.min(100, s.barRatio));
         }
 
-        tabs.onChange = function () { if (tabs.selection === t2) refreshSeriesList(); };
+        tabs.onChange = function () { if (tabs.selection === tSeries) refreshSeriesList(); };
         dataEt.onChange = refreshSeriesList;
-        typeDD.onChange = refreshSeriesList;
+        typeDD.onChange = function () { refreshSeriesList(); updateEnabled(); };
 
         function validate() {
             fromUI();
@@ -1166,10 +1231,10 @@
             try { onPreview(clone(s)); } catch (e) { alert("プレビューに失敗しました:\n" + e.message); }
         };
         dlg.defaultElement = null; // 複数行入力で Enter を使えるように
-        btns.children[2].onClick = function () { if (validate()) dlg.close(1); };
+        okBtn.onClick = function () { if (validate()) dlg.close(1); };
 
         toUI();
-        tabs.selection = t1;
+        tabs.selection = tBasic;
         var res = dlg.show();
         onClearPreview();
         return res === 1 ? s : null;
