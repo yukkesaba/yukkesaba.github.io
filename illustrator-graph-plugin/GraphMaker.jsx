@@ -15,6 +15,7 @@
 
     var TAG = "GRAPHMAKER_V1:";
     var PREFS_FILE = new File(Folder.userData + "/GraphMaker_prefs.txt");
+    var MM = 72 / 25.4; // 1mm = 2.8346pt（内部は pt で保持）
     var PALETTE = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
                    "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC"];
 
@@ -102,8 +103,8 @@
         return {
             type: "bar", // bar / stacked / hbar / hstacked / line / area
             data: "項目,2023年,2024年\nA,120,150\nB,80,95\nC,140,130\nD,60,110",
-            width: 300,
-            height: 200,
+            width: 100 * MM,   // 内部は pt。画面では mm で表示
+            height: 70 * MM,
             barRatio: 70,      // カテゴリ幅に対する棒グループの幅(%)
             barGap: 2,         // 同一カテゴリ内の棒同士の間隔(pt)
             plotBg: "none",
@@ -934,8 +935,8 @@
         reg.push({ path: "data", ctrl: dataEt, kind: "text" });
 
         r = row(tBasic, "サイズ");
-        addNum(r, "width", 5, "×");
-        addNum(r, "height", 5, "pt（グラフ本体の幅×高さ）");
+        reg.push({ path: "width", ctrl: addNum(r, null, 5, "×"), kind: "mm" });
+        reg.push({ path: "height", ctrl: addNum(r, null, 5, "mm（グラフ本体の幅×高さ）"), kind: "mm" });
         r = row(tBasic, "タイトル");
         addText(r, "title.text", 36);
         r = row(tBasic, "凡例");
@@ -1195,7 +1196,8 @@
                 else if (rr.kind === "list") {
                     for (var j = 0; j < rr.values.length; j++) if (rr.values[j] === v) rr.ctrl.selection = j;
                     if (!rr.ctrl.selection) rr.ctrl.selection = 0;
-                } else rr.ctrl.text = String(v);
+                } else if (rr.kind === "mm") rr.ctrl.text = String(Math.round(v / MM * 10) / 10);
+                else rr.ctrl.text = String(v);
             }
             refreshSeriesList();
             styleDD.selection = 0;
@@ -1208,6 +1210,11 @@
                 if (rr.kind === "bool") setPath(s, rr.path, rr.ctrl.value);
                 else if (rr.kind === "list") setPath(s, rr.path, rr.values[rr.ctrl.selection ? rr.ctrl.selection.index : 0]);
                 else if (rr.kind === "num") setPath(s, rr.path, num(rr.ctrl.text, getPath(s, rr.path)));
+                else if (rr.kind === "mm") {
+                    // 表示値から変わっていなければ元の値を保つ（丸め誤差を溜めない）
+                    if (rr.ctrl.text !== String(Math.round(getPath(s, rr.path) / MM * 10) / 10))
+                        setPath(s, rr.path, num(rr.ctrl.text, getPath(s, rr.path) / MM) * MM);
+                }
                 else setPath(s, rr.path, rr.ctrl.text);
             }
             storeSeries();
