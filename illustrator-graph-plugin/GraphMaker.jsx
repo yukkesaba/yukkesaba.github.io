@@ -130,6 +130,7 @@
                 yMin: "", yMax: "", yStep: "",
                 decimals: 0, thousands: true, prefix: "", suffix: "",
                 xRotate: 0,
+                xLabels: true, yLabels: true, // 目盛りの文字（数値・項目名）の表示
                 catAlign: "center",
                 lineOrder: "asc",    // 折れ線・面の重ね順 asc（系列1が下） / desc（系列1が上）
                 lineFromAxis: false, // 折れ線・面を Y 軸（左端）から右端まで描く  // 横棒の項目ラベルの揃え left / center / right
@@ -524,6 +525,7 @@
             var xp = xTickList[i].pos;
             if (ax.xTicks && tl > 0) line(ag, xp, oy - H, xp, oy - H - tl, ax.color, ax.width, "");
             var ly = oy - H - (ax.xTicks ? tl : 0) - 3;
+            if (ax.xLabels === false) continue;
             if (ax.xRotate) text(xl, xTickList[i].label, xp, ly, ax.xStyle, "right", "top", ax.xRotate);
             else text(xl, xTickList[i].label, xp, ly, ax.xStyle, "center", "top", 0);
         }
@@ -532,7 +534,7 @@
         for (i = 0; i < yTickList.length; i++) {
             var yp = yTickList[i].pos;
             if (ax.yTicks && tl > 0) line(ag, ox - tl, yp, ox, yp, ax.color, ax.width, "");
-            text(yl, yTickList[i].label, ox - (ax.yTicks ? tl : 0) - 3, yp, ax.yStyle, "right", "middle", 0);
+            if (ax.yLabels !== false) text(yl, yTickList[i].label, ox - (ax.yTicks ? tl : 0) - 3, yp, ax.yStyle, "right", "middle", 0);
         }
         // 横棒の項目ラベルは、ラベル列の中で 左 / 中央 / 右 揃え
         if (horiz && yl.textFrames.length) {
@@ -1087,9 +1089,11 @@
         r = row(pLines, "X 軸（下）");
         addCheck(r, "軸線", "axis.xAxisLine");
         addCheck(r, "目盛り線", "axis.xTicks");
+        addCheck(r, "ラベル（数値・項目名）", "axis.xLabels");
         r = row(pLines, "Y 軸（左）");
         addCheck(r, "軸線", "axis.yAxisLine");
         addCheck(r, "目盛り線", "axis.yTicks");
+        addCheck(r, "ラベル（数値・項目名）", "axis.yLabels");
         r = lineRow(pLines, "線の見た目", "axis.", { color: "color", width: "width" });
         r.add("statictext", undefined, "目盛りの長さ");
         addNum(r, "axis.tickLen", 3, "pt");
