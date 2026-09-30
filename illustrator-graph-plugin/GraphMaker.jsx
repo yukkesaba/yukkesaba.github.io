@@ -16,8 +16,9 @@
     var TAG = "GRAPHMAKER_V1:";
     var PREFS_FILE = new File(Folder.userData + "/GraphMaker_prefs.txt");
     var MM = 72 / 25.4; // 1mm = 2.8346pt（内部は pt で保持）
-    var PALETTE = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
-                   "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC"];
+    // 初期配色（CMYK）
+    var PALETTE = ["cmyk(75,45,10,0)", "cmyk(0,55,85,0)", "cmyk(5,80,60,0)", "cmyk(55,10,35,0)", "cmyk(70,15,85,0)",
+                   "cmyk(5,20,80,0)", "cmyk(35,60,15,0)", "cmyk(0,50,20,0)", "cmyk(40,55,65,5)", "cmyk(25,25,25,0)"];
 
     // ------------------------------------------------------------------
     // 汎用ユーティリティ (ExtendScript は ES3 なので自前で用意)
@@ -97,7 +98,7 @@
         };
     }
 
-    function textStyle(size) { return { font: "", size: size, color: "#333333" }; }
+    function textStyle(size) { return { font: "", size: size, color: "cmyk(0,0,0,80)" }; }
 
     function defaults() {
         return {
@@ -108,23 +109,23 @@
             barRatio: 70,      // カテゴリ幅に対する棒グループの幅(%)
             barGap: 2,         // 同一カテゴリ内の棒同士の間隔(pt)
             plotBg: "none",
-            plotFrame: { show: false, color: "#333333", width: 0.75, dash: "" },
+            plotFrame: { show: false, color: "cmyk(0,0,0,80)", width: 0.75, dash: "" },
             pie: {
                 hole: 0,              // ドーナツの穴の大きさ(%)。0 で通常の円グラフ
                 startAngle: 0,        // 開始角度（12 時の位置が 0°）
                 clockwise: true,
-                borderColor: "#FFFFFF", borderWidth: 1,
+                borderColor: "cmyk(0,0,0,0)", borderWidth: 1,
                 labelPos: "outside",  // inside / outside / none
                 showName: true, showPercent: true, showValue: false,
                 pctDecimals: 0,
-                leader: true, leaderColor: "#666666", leaderWidth: 0.5,
+                leader: true, leaderColor: "cmyk(0,0,0,60)", leaderWidth: 0.5,
                 labelStyle: textStyle(8)
             },
-            outerFrame: { show: false, color: "#333333", width: 0.75, dash: "", fill: "none", padding: 10, radius: 0 },
+            outerFrame: { show: false, color: "cmyk(0,0,0,80)", width: 0.75, dash: "", fill: "none", padding: 10, radius: 0 },
             series: [],
             valueLabels: { show: false, decimals: 0, style: textStyle(7) },
             axis: {
-                color: "#333333", width: 0.75, tickLen: 4,
+                color: "cmyk(0,0,0,80)", width: 0.75, tickLen: 4,
                 xAxisLine: true, yAxisLine: true, xTicks: true, yTicks: true,
                 yMin: "", yMax: "", yStep: "",
                 decimals: 0, thousands: true, prefix: "", suffix: "",
@@ -135,10 +136,10 @@
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
             },
             grid: {
-                xShow: false, xColor: "#CCCCCC", xWidth: 0.5, xDash: "2,2",
-                yShow: true, yColor: "#CCCCCC", yWidth: 0.5, yDash: "2,2"
+                xShow: false, xColor: "cmyk(0,0,0,20)", xWidth: 0.5, xDash: "2,2",
+                yShow: true, yColor: "cmyk(0,0,0,20)", yWidth: 0.5, yDash: "2,2"
             },
-            title: { text: "", style: { font: "", size: 14, color: "#000000" } },
+            title: { text: "", style: { font: "", size: 14, color: "cmyk(0,0,0,100)" } },
             legend: { show: true, position: "right", style: textStyle(8) }
         };
     }
