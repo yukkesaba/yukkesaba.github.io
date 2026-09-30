@@ -131,6 +131,7 @@
                 decimals: 0, thousands: true, prefix: "", suffix: "",
                 xRotate: 0,
                 catAlign: "center",
+                lineOrder: "asc",    // 折れ線・面の重ね順 asc（系列1が下） / desc（系列1が上）
                 lineFromAxis: false, // 折れ線・面を Y 軸（左端）から右端まで描く  // 横棒の項目ラベルの揃え left / center / right
                 xStyle: textStyle(8), yStyle: textStyle(8),
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
@@ -422,7 +423,10 @@
         var barW = (groupW - s.barGap * (ns - 1)) / ns;
         if (barW < 0.1) barW = 0.1;
 
-        for (var k = 0; k < ns; k++) {
+        // 重ね順：昇順＝系列1が一番下（後の系列ほど上）、降順＝系列1が一番上（折れ線・面のみ）
+        var desc = !isBar && ax.lineOrder === "desc";
+        for (var kk = 0; kk < ns; kk++) {
+            var k = desc ? ns - 1 - kk : kk;
             var st = s.series[k];
             var sg = g.groupItems.add();
             sg.name = d.names[k];
@@ -986,6 +990,9 @@
         sDash.helpTip = "例: 4,2（空欄で実線）";
         r = row(pLine, "開始位置");
         addCheck(r, "Y 軸から始める（全系列共通）", "axis.lineFromAxis").helpTip = "最初の点を Y 軸上、最後の点を右端に置きます";
+        r = row(pLine, "重ね順");
+        addList(r, "axis.lineOrder", ["昇順（系列1が一番下）", "降順（系列1が一番上）"], ["asc", "desc"]);
+        hint(r, "全系列共通");
         r = row(pLine, "マーカー");
         var MARKERS = ["none", "circle", "square", "diamond"];
         var sMarker = r.add("dropdownlist", undefined, ["なし", "円", "四角", "ひし形"]);
