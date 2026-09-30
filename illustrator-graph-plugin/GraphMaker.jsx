@@ -129,7 +129,8 @@
                 yMin: "", yMax: "", yStep: "",
                 decimals: 0, thousands: true, prefix: "", suffix: "",
                 xRotate: 0,
-                catAlign: "center",  // 横棒の項目ラベルの揃え left / center / right
+                catAlign: "center",
+                lineFromAxis: false, // 折れ線・面を Y 軸（左端）から右端まで描く  // 横棒の項目ラベルの揃え left / center / right
                 xStyle: textStyle(8), yStyle: textStyle(8),
                 xTitle: "", yTitle: "", titleStyle: textStyle(9)
             },
@@ -368,7 +369,12 @@
         }
         // カテゴリ i の中心座標（縦グラフは x（左→右）、横棒は y（上→下））
         var band = (horiz ? H : W) / n;
-        function cp(i) { return horiz ? oy - band * (i + 0.5) : ox + band * (i + 0.5); }
+        // 折れ線・面で「Y 軸から始める」ときは、最初の項目を左端・最後の項目を右端に置く
+        var edge = !isBar && ax.lineFromAxis && n > 1;
+        function cp(i) {
+            if (edge) return ox + W * i / (n - 1);
+            return horiz ? oy - band * (i + 0.5) : ox + band * (i + 0.5);
+        }
         var basePos = vp(Math.max(sc.min, Math.min(sc.max, 0)));
 
         // 目盛りリスト（X=下辺, Y=左辺）
@@ -969,6 +975,8 @@
         r.add("statictext", undefined, "破線");
         var sDash = addText(r, null, 5);
         sDash.helpTip = "例: 4,2（空欄で実線）";
+        r = row(pLine, "開始位置");
+        addCheck(r, "Y 軸から始める（全系列共通）", "axis.lineFromAxis").helpTip = "最初の点を Y 軸上、最後の点を右端に置きます";
         r = row(pLine, "マーカー");
         var MARKERS = ["none", "circle", "square", "diamond"];
         var sMarker = r.add("dropdownlist", undefined, ["なし", "円", "四角", "ひし形"]);
