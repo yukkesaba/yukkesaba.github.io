@@ -183,9 +183,18 @@
     // ------------------------------------------------------------------
     // 色・スタイル
     // ------------------------------------------------------------------
-    function makeColor(hex) {
-        hex = trim(hex || "").replace(/^#/, "");
-        if (hex === "" || hex.toLowerCase() === "none") return null;
+    // 色の文字列表現: "#RRGGBB"（RGB） / "C,M,Y,K" または "cmyk(C,M,Y,K)"（CMYK, 0〜100） / "none"
+    function makeColor(str) {
+        str = trim(str || "");
+        if (str === "" || str.toLowerCase() === "none") return null;
+        var m = str.match(/^(?:cmyk\s*\()?\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?$/i);
+        if (m) {
+            var k = new CMYKColor();
+            k.cyan = clamp100(m[1]); k.magenta = clamp100(m[2]);
+            k.yellow = clamp100(m[3]); k.black = clamp100(m[4]);
+            return k;
+        }
+        var hex = str.replace(/^#/, "");
         if (hex.length === 3) hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
         var c = new RGBColor();
         c.red = parseInt(hex.substr(0, 2), 16) || 0;
@@ -194,17 +203,16 @@
         return c;
     }
 
-    function colorToHex(c) {
+    function clamp100(v) { return Math.max(0, Math.min(100, parseFloat(v) || 0)); }
+
+    // カラーピッカーの結果を文字列に（CMYK は CMYK のまま保持）
+    function colorToString(c) {
         function h(v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? "0" + s : s; }
-        var r, g, b;
-        if (c.typename === "RGBColor") { r = c.red; g = c.green; b = c.blue; }
-        else if (c.typename === "CMYKColor") {
-            r = 255 * (1 - c.cyan / 100) * (1 - c.black / 100);
-            g = 255 * (1 - c.magenta / 100) * (1 - c.black / 100);
-            b = 255 * (1 - c.yellow / 100) * (1 - c.black / 100);
-        } else if (c.typename === "GrayColor") { r = g = b = 255 * (1 - c.gray / 100); }
-        else return null;
-        return ("#" + h(r) + h(g) + h(b)).toUpperCase();
+        function n(v) { return String(Math.round(v * 10) / 10); }
+        if (c.typename === "RGBColor") return ("#" + h(c.red) + h(c.green) + h(c.blue)).toUpperCase();
+        if (c.typename === "CMYKColor") return "cmyk(" + n(c.cyan) + "," + n(c.magenta) + "," + n(c.yellow) + "," + n(c.black) + ")";
+        if (c.typename === "GrayColor") return "cmyk(0,0,0," + n(c.gray) + ")";
+        return null;
     }
 
     function setFill(item, hex) {
@@ -860,7 +868,7 @@
         }
         function pickInto(e) {
             var r = app.showColorPicker(makeColor(e.text) || makeColor("#000000"));
-            var hx = r ? colorToHex(r) : null;
+            var hx = r ? colorToString(r) : null;
             if (hx) e.text = hx;
         }
         // 以下の add* はすべて既存の行 g に部品を追加する
@@ -879,8 +887,8 @@
         }
         function addColor(g, path) {
             var e = g.add("edittext", undefined, "");
-            e.characters = 8;
-            e.helpTip = "#RRGGBB 形式。なしにする場合は none";
+            e.characters = 14;
+            e.helpTip = "RGB は #RRGGBB、CMYK は cmyk(C,M,Y,K) または C,M,Y,K。なしにする場合は none";
             var b = g.add("button", undefined, "…");
             b.preferredSize = [26, 22];
             b.helpTip = "カラーピッカーで選択";
