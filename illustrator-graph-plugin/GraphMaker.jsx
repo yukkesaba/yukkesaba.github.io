@@ -94,8 +94,7 @@
             marker: "circle",                   // none / circle / square / diamond
             markerSize: 5,
             dash: "",                           // 例 "4,2"
-            opacity: 100,
-            visible: true                       // false でグラフから外す
+            opacity: 100
         };
     }
 
@@ -351,43 +350,7 @@
     // グラフ描画本体
     //   ox, oy : プロット領域の左上座標
     // ------------------------------------------------------------------
-    // 非表示の系列（円グラフでは項目）を除いたデータで描画し、設定は全体を保存する
     function drawGraph(s, ox, oy, container) {
-        var d = parseData(s.data);
-        var isPie = s.type === "pie";
-        var count = isPie ? d.labels.length : d.names.length;
-        ensureSeries(s, count);
-        var keep = [], i, j;
-        for (i = 0; i < count; i++) if (s.series[i].visible !== false) keep.push(i);
-        if (!keep.length) throw new Error("表示する" + (isPie ? "項目" : "系列") + "がありません。");
-        var v = clone(s);
-        v.series = [];
-        for (i = 0; i < keep.length; i++) v.series.push(s.series[keep[i]]);
-        var lines = [], row;
-        if (isPie) {
-            lines.push(["項目"].concat(d.names).join("\t"));
-            for (i = 0; i < keep.length; i++) {
-                row = [d.labels[keep[i]]];
-                for (j = 0; j < d.names.length; j++) row.push(d.values[j][keep[i]] === null ? "" : d.values[j][keep[i]]);
-                lines.push(row.join("\t"));
-            }
-        } else {
-            row = ["項目"];
-            for (j = 0; j < keep.length; j++) row.push(d.names[keep[j]]);
-            lines.push(row.join("\t"));
-            for (i = 0; i < d.labels.length; i++) {
-                row = [d.labels[i]];
-                for (j = 0; j < keep.length; j++) row.push(d.values[keep[j]][i] === null ? "" : d.values[keep[j]][i]);
-                lines.push(row.join("\t"));
-            }
-        }
-        v.data = lines.join("\n");
-        var g = drawGraphCore(v, ox, oy, container);
-        g.note = TAG + serialize(s);
-        return g;
-    }
-
-    function drawGraphCore(s, ox, oy, container) {
         var d = parseData(s.data);
         var W = s.width, H = s.height;
         if (s.type === "pie") {
@@ -1004,7 +967,6 @@
         r = row(tSeries, "系列");
         var seriesDD = r.add("dropdownlist", undefined, []);
         seriesDD.preferredSize.width = 260;
-        var sVisible = r.add("checkbox", undefined, "グラフに表示");
         var seriesHint = hint(tSeries, "");
         seriesHint.preferredSize.width = 520;
 
@@ -1058,7 +1020,6 @@
             st.marker = sMarker.selection ? MARKERS[sMarker.selection.index] : st.marker;
             st.markerSize = num(sMarkerSize.text, st.markerSize);
             st.opacity = Math.max(0, Math.min(100, num(sOpacity.text, st.opacity)));
-            st.visible = sVisible.value;
         }
         function loadSeries(i) {
             curSeries = i;
@@ -1068,7 +1029,6 @@
             sBorder.text = st.borderColor; sBorderW.text = st.borderWidth;
             for (var m = 0; m < MARKERS.length; m++) if (MARKERS[m] === st.marker) sMarker.selection = m;
             sMarkerSize.text = st.markerSize; sOpacity.text = st.opacity;
-            sVisible.value = st.visible !== false;
         }
         function curType() { return TYPES[typeDD.selection ? typeDD.selection.index : 0]; }
         function refreshSeriesList() {
