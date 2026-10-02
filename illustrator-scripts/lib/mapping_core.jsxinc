@@ -1,0 +1,361 @@
+﻿// 地図向けIllustrator補助スクリプト 共通ライブラリ
+// ExtendScript (ES3) で書いているため let/const/アロー関数などは使わない。
+//
+// Illustratorの行列は PostScript と同じ行ベクトル形式:
+//   [x y 1] * | a b 0 |
+//             | c d 0 |
+//             | tx ty 1 |
+//   → x' = a*x + c*y + tx,  y' = b*x + d*y + ty
+// 1行目 (a,b) がローカルX軸の像、2行目 (c,d) がローカルY軸の像。
+// item.transform(N) を適用すると、新しい行列は M * N になる。
+
+var PXM = $.global.PXM || {};
+$.global.PXM = PXM;
+
+PXM.EPS = 1e-6;
+
+// ---------- 2x2 行列ユーティリティ ----------
+
+PXM.lin = function (m) {
+    return { a: m.mValueA, b: m.mValueB, c: m.mValueC, d: m.mValueD };
+};
+
+PXM.mul = function (p, q) {
+    return {
+        a: p.a * q.a + p.b * q.c,
+        b: p.a * q.b + p.b * q.d,
+        c: p.c * q.a + p.d * q.c,
+        d: p.c * q.b + p.d * q.d
+    };
+};
+
+PXM.inv = function (m) {
+    var det = m.a * m.d - m.b * m.c;
+    if (Math.abs(det) < PXM.EPS) return null;
+    return { a: m.d / det, b: -m.b / det, c: -m.c / det, d: m.a / det };
+};
+
+PXM.rot = function (rad) {
+    var c = Math.cos(rad), s = Math.sin(rad);
+    return { a: c, b: s, c: -s, d: c };
+};
+
+PXM.toMatrix = function (l) {
+    var m = app.getIdentityMatrix();
+    m.mValueA = l.a; m.mValueB = l.b;
+    m.mValueC = l.c; m.mValueD = l.d;
+    m.mValueTX = 0; m.mValueTY = 0;
+    return m;
+};
+
+PXM.isIdentity = function (l, tol) {
+    tol = tol || 1e-4;
+    return Math.abs(l.a - 1) < tol && Math.abs(l.b) < tol &&
+        Math.abs(l.c) < tol && Math.abs(l.d - 1) < tol;
+};
+
+// ベクトル (dx,dy) に線形変換 l を掛ける (行ベクトル形式)
+PXM.apply = function (dx, dy, l) {
+    return [dx * l.a + dy * l.c, dx * l.b + dy * l.d];
+};
+
+// ---------- 変形適用 ----------
+
+// 線形変換 l を中心基準で適用（パターン・グラデーションも一緒に変形、線幅は変えない）
+PXM.transformLin = function (item, l) {
+    item.transform(PXM.toMatrix(l), true, true, true, true, 100, Transformation.CENTER);
+};
+
+// テキストのアンカーポイント（原点）を動かさずに線形変換を適用
+PXM.transformKeepAnchor = function (tf, l) {
+    var q0 = tf.anchor;
+    PXM.transformLin(tf, l);
+    var q1 = tf.anchor;
+    tf.translate(q0[0] - q1[0], q0[1] - q1[1]);
+};
+
+// ---------- 選択の収集 ----------
+
+// 選択範囲（グループ・クリップグループ内も含む）から条件に合う項目を集める
+PXM.collect = function (test) {
+    var out = [];
+    if (app.documents.length === 0) return out;
+    var sel = app.activeDocument.selection;
+    if (!sel) return out;
+    if (sel.typename === "TextRange") {
+        // 文字入力中は、そのテキストフレームを対象にする
+        try {
+            var frames = sel.story.textFrames;
+            for (var k = 0; k < frames.length; k++) if (test(frames[k])) out.push(frames[k]);
+        } catch (e) { }
+        return out;
+    }
+    function walk(item) {
+        if (test(item)) { out.push(item); return; }
+        if (item.typename === "GroupItem") {
+            for (var i = 0; i < item.pageItems.length; i++) walk(item.pageItems[i]);
+        }
+    }
+    for (var i = 0; i < sel.length; i++) walk(sel[i]);
+    return out;
+};
+
+PXM.isText = function (it) { return it.typename === "TextFrame"; };
+PXM.isImage = function (it) { return it.typename === "PlacedItem" || it.typename === "RasterItem"; };
+
+PXM.isVertical = function (tf) {
+    try { return tf.orientation === TextOrientation.VERTICAL; } catch (e) { return false; }
+};
+
+// ---------- ① 配置画像サイズをリセット ----------
+// 行列を単位行列に戻す = 縦横比は元画像どおり、回転0、1px=1pt(72dpi相当)。中心位置は保つ。
+
+PXM.resetImages = function () {
+    var items = PXM.collect(PXM.isImage);
+    if (items.length === 0) return { done: 0, skipped: 0, message: "配置画像（リンク／埋め込み）を選択してください。" };
+    var done = 0, skipped = 0;
+    for (var i = 0; i < items.length; i++) {
+        try {
+            var l = PXM.lin(items[i].matrix);
+            if (PXM.isIdentity(l)) { done++; continue; }
+            var n = PXM.inv(l);
+            if (!n) { skipped++; continue; }
+            PXM.transformLin(items[i], n);
+            done++;
+        } catch (e) { skipped++; }
+    }
+    return { done: done, skipped: skipped };
+};
+
+// ---------- ② テキストを水平垂直に戻す ----------
+// 横組みは文字の並び方向（ローカルX軸）を水平に、縦組みは列方向（ローカルY軸）を垂直に戻す。
+// アンカーポイントを中心に回転させる。
+
+PXM.textAngle = function (tf) {
+    var l = PXM.lin(tf.matrix);
+    if (PXM.isVertical(tf)) return Math.atan2(-l.c, l.d);
+    return Math.atan2(l.b, l.a);
+};
+
+PXM.straightenTexts = function () {
+    var items = PXM.collect(PXM.isText);
+    if (items.length === 0) return { done: 0, skipped: 0, message: "テキストを選択してください。" };
+    var done = 0, skipped = 0;
+    for (var i = 0; i < items.length; i++) {
+        var tf = items[i];
+        try {
+            if (tf.kind === TextType.PATHTEXT) { skipped++; continue; }
+            var t = PXM.textAngle(tf);
+            if (Math.abs(t) < 1e-6) { done++; continue; }
+            PXM.transformKeepAnchor(tf, PXM.rot(-t));
+            // 念のため検算し、逆向きに回っていたら戻してやり直す
+            if (Math.abs(PXM.textAngle(tf)) > 1e-4) {
+                PXM.transformKeepAnchor(tf, PXM.rot(2 * t));
+            }
+            done++;
+        } catch (e) { skipped++; }
+    }
+    return { done: done, skipped: skipped };
+};
+
+// ---------- ③ テキストのシアー変形除去 ----------
+// 横組み: X軸の像 (a,b) を保ち、Y軸の像をそれに直交させる（長さは面積を保つ値）
+// 縦組み: Y軸の像 (c,d) を保ち、X軸の像をそれに直交させる
+// 回転・拡大縮小は残り、シアー成分だけが消える。
+
+PXM.unshearTarget = function (l, vertical) {
+    var det = l.a * l.d - l.b * l.c;
+    if (vertical) {
+        var vv = l.c * l.c + l.d * l.d;
+        if (vv < PXM.EPS) return null;
+        var k = det / vv;
+        return { a: k * l.d, b: -k * l.c, c: l.c, d: l.d };
+    }
+    var uu = l.a * l.a + l.b * l.b;
+    if (uu < PXM.EPS) return null;
+    var k2 = det / uu;
+    return { a: l.a, b: l.b, c: -k2 * l.b, d: k2 * l.a };
+};
+
+// シアー量（2軸の像の内積を長さで正規化したもの。0なら直交）
+PXM.shearAmount = function (l) {
+    var nu = Math.sqrt(l.a * l.a + l.b * l.b), nv = Math.sqrt(l.c * l.c + l.d * l.d);
+    if (nu < PXM.EPS || nv < PXM.EPS) return 0;
+    return Math.abs((l.a * l.c + l.b * l.d) / (nu * nv));
+};
+
+PXM.savePathPoints = function (path) {
+    var pts = [];
+    for (var i = 0; i < path.pathPoints.length; i++) {
+        var p = path.pathPoints[i];
+        pts.push([p.anchor, p.leftDirection, p.rightDirection, p.pointType]);
+    }
+    return pts;
+};
+
+PXM.restorePathPoints = function (path, pts) {
+    for (var i = 0; i < pts.length && i < path.pathPoints.length; i++) {
+        var p = path.pathPoints[i];
+        p.anchor = pts[i][0];
+        p.leftDirection = pts[i][1];
+        p.rightDirection = pts[i][2];
+        p.pointType = pts[i][3];
+    }
+};
+
+PXM.unshearOne = function (tf, n) {
+    if (tf.kind === TextType.PATHTEXT) {
+        // パス上テキスト: 変形後にパスの形を元に戻し、文字のシアー成分だけ除去する
+        var pts = PXM.savePathPoints(tf.textPath);
+        PXM.transformLin(tf, n);
+        PXM.restorePathPoints(tf.textPath, pts);
+    } else {
+        PXM.transformKeepAnchor(tf, n);
+    }
+};
+
+PXM.unshearTexts = function () {
+    var items = PXM.collect(PXM.isText);
+    if (items.length === 0) return { done: 0, skipped: 0, message: "テキストを選択してください。" };
+    var done = 0, skipped = 0;
+    for (var i = 0; i < items.length; i++) {
+        var tf = items[i];
+        try {
+            var l = PXM.lin(tf.matrix);
+            if (PXM.shearAmount(l) < 1e-6) { done++; continue; }
+            var target = PXM.unshearTarget(l, PXM.isVertical(tf));
+            var li = PXM.inv(l);
+            if (!target || !li) { skipped++; continue; }
+            // 新しい行列 = M * N となるよう N = M^-1 * M'
+            var n = PXM.mul(li, target);
+            PXM.unshearOne(tf, n);
+            // 検算: シアーが残っていたら掛け順が逆だったとみなしてやり直す
+            if (PXM.shearAmount(PXM.lin(tf.matrix)) > 1e-4) {
+                PXM.unshearOne(tf, PXM.inv(n));
+                PXM.unshearOne(tf, PXM.mul(target, li));
+            }
+            done++;
+        } catch (e) { skipped++; }
+    }
+    return { done: done, skipped: skipped };
+};
+
+// ---------- ④ テキスト原点（行揃え変更・横組み/縦組み変更） ----------
+// 文字の見た目の位置は変えずに、アンカーポイント位置（＝行揃え）だけを変える。
+// 横組み/縦組みが切り替わる場合は、アンカーポイントの位置を保つ。
+//
+// 手順:
+//  A. アンカーを中心に変形を打ち消し、単位行列の状態にする
+//  B. 行揃えを変え、変更前後のバウンディングボックス左上が一致するよう平行移動
+//  C. 元のアンカー位置を中心に、元の変形を掛け直す
+
+PXM.setJustification = function (tf, just) {
+    var ps = tf.paragraphs;
+    for (var i = 0; i < ps.length; i++) {
+        try { ps[i].paragraphAttributes.justification = just; } catch (e) { }
+    }
+    try { tf.textRange.paragraphAttributes.justification = just; } catch (e2) { }
+};
+
+PXM.currentJustification = function (tf) {
+    try { return tf.textRange.paragraphAttributes.justification; } catch (e) { return null; }
+};
+
+PXM.justFromName = function (name) {
+    if (name === "CENTER") return Justification.CENTER;
+    if (name === "RIGHT") return Justification.RIGHT;
+    return Justification.LEFT;
+};
+
+PXM.textOriginOne = function (tf, vertical, just) {
+    var wasVertical = PXM.isVertical(tf);
+    if (wasVertical === vertical && PXM.currentJustification(tf) === just) return;
+
+    var l = PXM.lin(tf.matrix);
+    var li = PXM.inv(l);
+    if (!li) throw new Error("変形が潰れているため処理できません");
+
+    // A
+    var q0 = tf.anchor;
+    if (!PXM.isIdentity(l, 1e-9)) PXM.transformKeepAnchor(tf, li);
+
+    // B
+    if (wasVertical === vertical) {
+        var b0 = tf.geometricBounds;
+        PXM.setJustification(tf, just);
+        var b1 = tf.geometricBounds;
+        tf.translate(b0[0] - b1[0], b0[1] - b1[1]);
+    } else {
+        tf.orientation = vertical ? TextOrientation.VERTICAL : TextOrientation.HORIZONTAL;
+        PXM.setJustification(tf, just);
+        var qa = tf.anchor;
+        tf.translate(q0[0] - qa[0], q0[1] - qa[1]);
+    }
+    var q1 = tf.anchor;
+
+    // C
+    if (!PXM.isIdentity(l, 1e-9)) {
+        PXM.transformLin(tf, l);
+        var off = PXM.apply(q1[0] - q0[0], q1[1] - q0[1], l);
+        var qn = tf.anchor;
+        tf.translate(q0[0] + off[0] - qn[0], q0[1] + off[1] - qn[1]);
+    }
+};
+
+// vertical: true=縦組み, justName: "LEFT" | "CENTER" | "RIGHT"（縦組みでは上・中央・下）
+PXM.textOrigin = function (vertical, justName) {
+    var items = PXM.collect(PXM.isText);
+    if (items.length === 0) return { done: 0, skipped: 0, message: "ポイント文字を選択してください。" };
+    var just = PXM.justFromName(justName);
+    var done = 0, skipped = 0;
+    for (var i = 0; i < items.length; i++) {
+        var tf = items[i];
+        try {
+            if (tf.kind !== TextType.POINTTEXT) { skipped++; continue; }
+            PXM.textOriginOne(tf, vertical, just);
+            done++;
+        } catch (e) { skipped++; }
+    }
+    return { done: done, skipped: skipped };
+};
+
+// ---------- ⑤ 高速移動 ----------
+// 2点のオープンパスを1つだけ選択して実行。1点目→2点目（描画方向）のベクトル分、
+// 表示中かつロックされていないレイヤーのオブジェクトをすべて移動する。
+
+PXM.moveVector = function () {
+    if (app.documents.length === 0) return null;
+    var sel = app.activeDocument.selection;
+    if (!sel || sel.length !== 1 || sel[0].typename !== "PathItem") return null;
+    var p = sel[0];
+    if (p.closed || p.pathPoints.length !== 2) return null;
+    var a = p.pathPoints[0].anchor, b = p.pathPoints[1].anchor;
+    return { path: p, dx: b[0] - a[0], dy: b[1] - a[1] };
+};
+
+PXM.fastMove = function (dx, dy) {
+    var doc = app.activeDocument;
+    var moved = 0, skipped = 0;
+    function moveLayer(layer) {
+        if (!layer.visible || layer.locked) return;
+        var items = layer.pageItems;
+        for (var i = 0; i < items.length; i++) {
+            try {
+                if (items[i].locked) { skipped++; continue; }
+                items[i].translate(dx, dy, true, true, true, true);
+                moved++;
+            } catch (e) { skipped++; }
+        }
+        for (var j = 0; j < layer.layers.length; j++) moveLayer(layer.layers[j]);
+    }
+    for (var k = 0; k < doc.layers.length; k++) moveLayer(doc.layers[k]);
+    return { done: moved, skipped: skipped };
+};
+
+PXM.report = function (title, r) {
+    if (r.message) { alert(r.message, title); return; }
+    var msg = r.done + " 件処理しました。";
+    if (r.skipped) msg += "\n" + r.skipped + " 件は対象外または処理できませんでした。";
+    // 成功時は静かに終わる。スキップがあった場合だけ知らせる
+    if (r.skipped) alert(msg, title);
+};
