@@ -1199,6 +1199,8 @@
         // ---------- ボタン ----------
         var btns = dlg.add("group");
         btns.alignment = "right";
+        var resetBtn = btns.add("button", undefined, "初期設定に戻す");
+        resetBtn.helpTip = "データ以外の設定（色・軸・文字など）を初期値に戻します";
         var prevBtn = btns.add("button", undefined, "プレビュー");
         btns.add("button", undefined, "キャンセル", { name: "cancel" });
         var okBtn = btns.add("button", undefined, isEdit ? "更新" : "作成", { name: "ok" });
@@ -1251,6 +1253,15 @@
             if (s.height <= 0) s.height = 100;
             s.barRatio = Math.max(1, Math.min(100, s.barRatio));
         }
+
+        resetBtn.onClick = function () {
+            if (!confirm("データ以外の設定を初期値に戻しますか？")) return;
+            var keepData = dataEt.text, d0 = defaults();
+            for (var k in d0) if (d0.hasOwnProperty(k) && k !== "data") s[k] = d0[k];
+            s.data = keepData;
+            curSeries = -1; curStyle = -1; // 画面の古い値を書き戻さない
+            toUI();
+        };
 
         tabs.onChange = function () { if (tabs.selection === tSeries) refreshSeriesList(); };
         dataEt.onChange = refreshSeriesList;
