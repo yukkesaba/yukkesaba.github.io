@@ -12,12 +12,12 @@ PlugX-MappingTools の一部機能を参考に、ExtendScript（.jsx）で再現
 
 ## インストール
 
-`illustrator-scripts` フォルダの中身（`lib` フォルダも含む）を、Illustrator のスクリプトフォルダにコピーして Illustrator を再起動します。
+`illustrator-scripts` フォルダの `.jsx` 5つと `mapping_core.jsxinc` を、Illustrator のスクリプトフォルダにコピーして Illustrator を再起動します。
 
 - Windows: `C:\Program Files\Adobe\Adobe Illustrator <バージョン>\Presets\ja_JP\スクリプト\`
 - Mac: `/Applications/Adobe Illustrator <バージョン>/Presets/ja_JP/スクリプト/`
 
-コピーすると「ファイル > スクリプト」に表示されます。`lib/mapping_core.jsxinc` は各スクリプトから読み込む共通ファイルなので、必ず一緒に置いてください。
+コピーすると「ファイル > スクリプト」に表示されます。`mapping_core.jsxinc` は各スクリプトから読み込む共通ファイルです（メニューには出ません）。必ず `.jsx` と同じフォルダに置いてください。サブフォルダに入れるとメニューに表示されてしまいます。
 
 ショートカットで使いたい場合は、アクションパネルで「メニュー項目を挿入」からスクリプトを記録し、ファンクションキーを割り当てます。
 

@@ -3,7 +3,7 @@
 // 1点目→2点目（描画方向）の分だけ、表示中かつロックされていないレイヤーの
 // オブジェクトをすべて移動する。移動するオブジェクトを選択する必要はない。
 #target illustrator
-#include "lib/mapping_core.jsxinc"
+#include "mapping_core.jsxinc"
 
 (function () {
     var title = "高速移動";

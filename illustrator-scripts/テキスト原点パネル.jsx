@@ -10,7 +10,7 @@
         try { $.global.pxmTextOriginPanel.show(); return; } catch (e) { }
     }
 
-    var libFile = new File(new File($.fileName).parent + "/lib/mapping_core.jsxinc");
+    var libFile = new File(new File($.fileName).parent + "/mapping_core.jsxinc");
     var libPath = libFile.fsName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
     function run(vertical, justName) {
