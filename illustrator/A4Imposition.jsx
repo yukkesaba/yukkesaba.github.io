@@ -28,6 +28,7 @@
         return;
     }
 
+    var step = "準備";
     var prevCS = app.coordinateSystem;
     app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
     try {
@@ -49,20 +50,53 @@
             return;
         }
 
-        impose(srcDoc, items, plan, opt);
+        try {
+            impose(srcDoc, items, plan, opt);
+        } catch (e) {
+            // 途中で失敗したら元ドキュメントに残った作業用レイヤーを片付ける
+            try { srcDoc.layers.getByName("面付け_tmp").remove(); } catch (ignore) {}
+            throw e;
+        }
         alert(plan.cols + " 列 × " + plan.rows + " 行 = " + (plan.cols * plan.rows) + " 個を面付けしました。"
             + (plan.rotate ? "\n（オブジェクトを 90° 回転）" : "")
             + "\n用紙: A4 " + (plan.landscape ? "横" : "縦"));
     } catch (e) {
-        alert("エラーが発生しました:\n" + e);
+        alert("エラーが発生しました（" + step + "）:\n" + e + (e.line ? "\n行: " + e.line : ""));
     } finally {
         app.coordinateSystem = prevCS;
     }
 
     // ---------------------------------------------------------------
 
-    function bounds(item, useVisible) {
+    function rawBounds(item, useVisible) {
         return useVisible ? item.visibleBounds : item.geometricBounds;
+    }
+
+    // 見た目どおりの外接矩形 [左, 上, 右, 下]。
+    // クリップグループはマスクパスの範囲だけ、通常グループは中身を再帰的に合算する
+    // （Illustrator の bounds はマスクで隠れた部分まで含んでしまうため）。
+    function bounds(item, useVisible) {
+        if (item.typename !== "GroupItem") return rawBounds(item, useVisible);
+        var kids = item.pageItems;
+        if (item.clipped) {
+            for (var i = 0; i < kids.length; i++) {
+                if (isClippingPath(kids[i])) return rawBounds(kids[i], useVisible);
+            }
+        }
+        var u = null;
+        for (var k = 0; k < kids.length; k++) {
+            var it = kids[k];
+            if (it.hidden || it.guides) continue;
+            var b = bounds(it, useVisible);
+            u = u ? [Math.min(u[0], b[0]), Math.max(u[1], b[1]), Math.max(u[2], b[2]), Math.min(u[3], b[3])] : b;
+        }
+        return u || rawBounds(item, useVisible);
+    }
+
+    function isClippingPath(it) {
+        if (it.typename === "PathItem") return it.clipping;
+        if (it.typename === "CompoundPathItem") return it.pathItems.length > 0 && it.pathItems[0].clipping;
+        return false;
     }
 
     // 選択全体の外接矩形サイズ（pt）
@@ -120,11 +154,26 @@
     }
 
     function impose(srcDoc, items, plan, o) {
+        // 1. 元ドキュメント内で選択オブジェクトを 1 つのグループに複製・回転しておく
+        //    （別ドキュメントのグループへ直接複製すると PARM エラーになるため）
+        step = "オブジェクトの複製";
+        var tmpLayer = srcDoc.layers.add();
+        tmpLayer.name = "面付け_tmp";
+        var master = tmpLayer.groupItems.add();
+        // 重なり順を維持するため背面側から先頭に積む
+        for (var j = items.length - 1; j >= 0; j--) {
+            items[j].duplicate(master, ElementPlacement.PLACEATBEGINNING);
+        }
+        if (plan.rotate) master.rotate(90);
+
+        // 2. 出力先の A4 アートボードを用意
         var doc, abRect;
         if (o.output === "newDoc") {
-            doc = app.documents.add(srcDoc.documentColorSpace, plan.pw, plan.ph);
+            step = "新規ドキュメントの作成";
+            doc = createA4Document(srcDoc, plan);
             abRect = doc.artboards[0].artboardRect;
         } else {
+            step = "アートボードの追加";
             doc = srcDoc;
             var maxRight = -Infinity, top = doc.artboards[0].artboardRect[1];
             for (var i = 0; i < doc.artboards.length; i++) {
@@ -137,16 +186,22 @@
             doc.artboards.setActiveArtboardIndex(doc.artboards.length - 1);
         }
 
-        var layer = doc.layers.add();
-        layer.name = "面付け";
-
-        // 選択オブジェクトを 1 つのグループに複製（重なり順を維持するため背面側から）
-        var master = layer.groupItems.add();
-        for (var j = items.length - 1; j >= 0; j--) {
-            items[j].duplicate(master, ElementPlacement.PLACEATBEGINNING);
+        // 3. 出力先レイヤーへ移す
+        step = "面付けレイヤーへの配置";
+        var layer;
+        if (doc === srcDoc) {
+            layer = tmpLayer;
+            layer.name = "面付け";
+        } else {
+            layer = doc.layers[0];
+            layer.name = "面付け";
+            var moved = master.duplicate(layer, ElementPlacement.PLACEATBEGINNING);
+            tmpLayer.remove();
+            master = moved;
         }
-        if (plan.rotate) master.rotate(90);
 
+        // 4. 中央揃えで並べる
+        step = "面付け配置";
         var mb = bounds(master, o.useVisible);
         var totalW = plan.cols * plan.w + (plan.cols - 1) * o.gapX;
         var totalH = plan.rows * plan.h + (plan.rows - 1) * o.gapY;
@@ -155,13 +210,28 @@
 
         for (var r = 0; r < plan.rows; r++) {
             for (var c = 0; c < plan.cols; c++) {
-                var dup = master.duplicate();
+                var dup = master.duplicate(layer, ElementPlacement.PLACEATEND);
                 dup.translate(startX + c * (plan.w + o.gapX) - mb[0],
                               startY - r * (plan.h + o.gapY) - mb[1]);
             }
         }
         master.remove();
         doc.selection = null;
+    }
+
+    function createA4Document(srcDoc, plan) {
+        var cmyk = srcDoc.documentColorSpace === DocumentColorSpace.CMYK;
+        try {
+            var preset = new DocumentPreset();
+            preset.width = plan.pw;
+            preset.height = plan.ph;
+            preset.colorMode = cmyk ? DocumentColorSpace.CMYK : DocumentColorSpace.RGB;
+            preset.units = RulerUnits.Millimeters;
+            preset.numArtboards = 1;
+            return app.documents.addDocument(cmyk ? "Print" : "Web", preset, false);
+        } catch (e) {
+            return app.documents.add(cmyk ? DocumentColorSpace.CMYK : DocumentColorSpace.RGB, plan.pw, plan.ph);
+        }
     }
 
     // ---------------------------------------------------------------
