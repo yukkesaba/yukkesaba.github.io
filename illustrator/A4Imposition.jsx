@@ -200,21 +200,31 @@
             master = moved;
         }
 
-        // 4. 中央揃えで並べる
+        // 4. 間隔どおりに並べる
         step = "面付け配置";
-        var mb = bounds(master, o.useVisible);
-        var totalW = plan.cols * plan.w + (plan.cols - 1) * o.gapX;
-        var totalH = plan.rows * plan.h + (plan.rows - 1) * o.gapY;
-        var startX = abRect[0] + (plan.pw - totalW) / 2;
-        var startY = abRect[1] - (plan.ph - totalH) / 2;
-
+        var dups = [];
         for (var r = 0; r < plan.rows; r++) {
             for (var c = 0; c < plan.cols; c++) {
                 var dup = master.duplicate(layer, ElementPlacement.PLACEATEND);
-                dup.translate(startX + c * (plan.w + o.gapX) - mb[0],
-                              startY - r * (plan.h + o.gapY) - mb[1]);
+                dup.translate(c * (plan.w + o.gapX), -r * (plan.h + o.gapY));
+                dups.push(dup);
             }
         }
+
+        // 5. 並べた全体の中心をアートボードの中心に合わせる
+        //    （新規ドキュメント作成で座標系設定がリセットされることがあるため、ここで改めて揃えて測る）
+        step = "中央揃え";
+        app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
+        var abIndex = o.output === "newDoc" ? 0 : doc.artboards.length - 1;
+        abRect = doc.artboards[abIndex].artboardRect;
+        var gb = null;
+        for (var d = 0; d < dups.length; d++) {
+            var b = bounds(dups[d], o.useVisible);
+            gb = gb ? [Math.min(gb[0], b[0]), Math.max(gb[1], b[1]), Math.max(gb[2], b[2]), Math.min(gb[3], b[3])] : b;
+        }
+        var dx = (abRect[0] + abRect[2]) / 2 - (gb[0] + gb[2]) / 2;
+        var dy = (abRect[1] + abRect[3]) / 2 - (gb[1] + gb[3]) / 2;
+        for (var m = 0; m < dups.length; m++) dups[m].translate(dx, dy);
         master.remove();
         doc.selection = null;
     }
@@ -281,7 +291,7 @@
         var cbRotate = pPaper.add("checkbox", undefined, "90° 回転した方が多く入る場合は回転する");
         cbRotate.value = true;
         var cbVisible = pPaper.add("checkbox", undefined, "線幅を含めたサイズで計算する");
-        cbVisible.value = true;
+        cbVisible.value = false;
 
         // 出力先
         var pOut = dlg.add("panel", undefined, "出力先");
