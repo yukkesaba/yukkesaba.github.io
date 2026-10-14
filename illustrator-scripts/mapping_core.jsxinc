@@ -108,19 +108,67 @@ PXM.isVertical = function (tf) {
 };
 
 // ---------- ① 配置画像サイズをリセット ----------
-// 行列を単位行列に戻す = 縦横比は元画像どおり、回転0、1px=1pt(72dpi相当)。中心位置は保つ。
+// 縦横比は元画像どおり、回転0、1px=1pt(72dpi相当)に戻す。中心位置は保つ。
+//
+// 画像の行列は画像内部の座標系（ピクセルは上→下に並ぶ）からの変換なので、
+// 変形していない画像でも単位行列にはならない（通常は mValueD が負）。
+// そこで「その画像を新規配置したときの行列」の符号を正しい向きとして採用する。
+// リンク画像は実際に一時配置して確かめ、埋め込み画像など確かめられないものは
+// 同じ実行中に確かめたラスター画像の結果、なければ (1, -1) を使う。
+
+PXM.RASTER_EXT = /\.(jpe?g|png|tiff?|psd|psb|gif|bmp|webp|heic)$/i;
+
+PXM.signOf = function (v) { return v < 0 ? -1 : 1; };
+
+PXM.naturalSign = function (item, cache) {
+    if (item.typename === "PlacedItem") {
+        var f = null;
+        try { f = item.file; } catch (e) { }
+        if (f && f.exists) {
+            var key = f.fsName;
+            if (cache.files[key]) return cache.files[key];
+            var tmp = null;
+            try {
+                tmp = item.parent.placedItems.add();
+                tmp.file = f;
+                var l = PXM.lin(tmp.matrix);
+                var s = { a: PXM.signOf(l.a), d: PXM.signOf(l.d) };
+                cache.files[key] = s;
+                if (PXM.RASTER_EXT.test(f.name)) cache.raster = s;
+                tmp.remove();
+                return s;
+            } catch (e2) {
+                try { if (tmp) tmp.remove(); } catch (e3) { }
+            }
+        }
+    }
+    return null;
+};
 
 PXM.resetImages = function () {
     var items = PXM.collect(PXM.isImage);
     if (items.length === 0) return { done: 0, skipped: 0, message: "配置画像（リンク／埋め込み）を選択してください。" };
+    var cache = { files: {}, raster: null };
+    var signs = [], i;
+    // 先にリンク画像を調べておき、埋め込み画像の向きの判断に使う
+    for (i = 0; i < items.length; i++) signs.push(PXM.naturalSign(items[i], cache));
     var done = 0, skipped = 0;
-    for (var i = 0; i < items.length; i++) {
+    for (i = 0; i < items.length; i++) {
         try {
+            var s = signs[i] || cache.raster || { a: 1, d: -1 };
+            var target = { a: s.a, b: 0, c: 0, d: s.d };
             var l = PXM.lin(items[i].matrix);
-            if (PXM.isIdentity(l)) { done++; continue; }
-            var n = PXM.inv(l);
-            if (!n) { skipped++; continue; }
+            var li = PXM.inv(l);
+            if (!li) { skipped++; continue; }
+            if (PXM.isIdentity(PXM.mul(l, PXM.inv(target)))) { done++; continue; }
+            // 新しい行列 = M * N = target となるよう N = M^-1 * target
+            var n = PXM.mul(li, target);
             PXM.transformLin(items[i], n);
+            // 検算: 掛け順が逆だった場合は戻してやり直す
+            if (!PXM.isIdentity(PXM.mul(PXM.lin(items[i].matrix), PXM.inv(target)))) {
+                PXM.transformLin(items[i], PXM.inv(n));
+                PXM.transformLin(items[i], PXM.mul(target, li));
+            }
             done++;
         } catch (e) { skipped++; }
     }
