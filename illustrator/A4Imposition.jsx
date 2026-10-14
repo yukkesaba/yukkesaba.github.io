@@ -100,44 +100,11 @@
     }
 
     // 選択全体の外接矩形サイズ（pt）
-    // 文字を含むものは、一時的に複製してアウトライン化した形で測る
-    // （テキストの bounds は行送りやフォントの上下余白を含み、文字の実際の形とずれるため）
-    function inkBounds(item, useVisible) {
-        if (!hasText(item)) return bounds(item, useVisible);
-        var dup = item.duplicate();
-        try {
-            outlineTexts(dup);
-            return bounds(dup, useVisible);
-        } finally {
-            dup.remove();
-        }
-    }
-
-    function hasText(item) {
-        if (item.typename === "TextFrame") return true;
-        if (item.typename !== "GroupItem") return false;
-        for (var i = 0; i < item.pageItems.length; i++) {
-            if (hasText(item.pageItems[i])) return true;
-        }
-        return false;
-    }
-
-    function outlineTexts(item) {
-        if (item.typename === "TextFrame") {
-            try { item.createOutline(); } catch (e) { item.remove(); } // 空のテキストは除外
-            return;
-        }
-        if (item.typename !== "GroupItem") return;
-        var kids = [];
-        for (var i = 0; i < item.pageItems.length; i++) kids.push(item.pageItems[i]);
-        for (var k = 0; k < kids.length; k++) outlineTexts(kids[k]);
-    }
-
     function itemsSize(list, useVisible) {
-        var b = inkBounds(list[0], useVisible);
+        var b = bounds(list[0], useVisible);
         var l = b[0], t = b[1], r = b[2], btm = b[3];
         for (var i = 1; i < list.length; i++) {
-            b = inkBounds(list[i], useVisible);
+            b = bounds(list[i], useVisible);
             l = Math.min(l, b[0]);
             t = Math.max(t, b[1]);
             r = Math.max(r, b[2]);
@@ -252,7 +219,7 @@
         abRect = doc.artboards[abIndex].artboardRect;
         // 中央揃えは「線幅込みの見た目の範囲」で行う（間隔計算の設定とは独立。印刷される範囲の中心を合わせる）
         // 各コピーは master を平行移動しただけなので、全体の範囲は master の範囲から求まる
-        var mb = inkBounds(master, true);
+        var mb = bounds(master, true);
         var gb = [mb[0], mb[1],
                   mb[2] + (plan.cols - 1) * (plan.w + o.gapX),
                   mb[3] - (plan.rows - 1) * (plan.h + o.gapY)];
