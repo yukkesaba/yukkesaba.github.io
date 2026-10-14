@@ -217,9 +217,8 @@
         app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
         var abIndex = o.output === "newDoc" ? 0 : doc.artboards.length - 1;
         abRect = doc.artboards[abIndex].artboardRect;
-        // 中央揃えは「線幅込みの見た目の範囲」で行う（間隔計算の設定とは独立。印刷される範囲の中心を合わせる）
         // 各コピーは master を平行移動しただけなので、全体の範囲は master の範囲から求まる
-        var mb = bounds(master, true);
+        var mb = bounds(master, o.useVisible);
         var gb = [mb[0], mb[1],
                   mb[2] + (plan.cols - 1) * (plan.w + o.gapX),
                   mb[3] - (plan.rows - 1) * (plan.h + o.gapY)];
