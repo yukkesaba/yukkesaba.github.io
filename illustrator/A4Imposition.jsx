@@ -86,7 +86,7 @@
         var u = null;
         for (var k = 0; k < kids.length; k++) {
             var it = kids[k];
-            if (it.hidden || it.guides) continue;
+            if (it.hidden) continue; // ガイドはサイズ・中央揃えの基準に含める
             var b = bounds(it, useVisible);
             u = u ? [Math.min(u[0], b[0]), Math.max(u[1], b[1]), Math.max(u[2], b[2]), Math.min(u[3], b[3])] : b;
         }
